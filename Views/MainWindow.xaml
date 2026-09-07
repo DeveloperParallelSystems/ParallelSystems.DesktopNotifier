@@ -1,0 +1,140 @@
+<Window x:Class="ParallelSystems.DesktopNotifier.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:ParallelSystems.DesktopNotifier.Views"
+        Title="Parallel Systems — Daily Work Sessions" Width="1040" Height="720"
+        Icon="/Assets/logo-mark.ico"
+        MinWidth="820" MinHeight="560" WindowStartupLocation="CenterScreen"
+        Background="{StaticResource PaperBrush}">
+    <Window.Resources>
+        <local:ExistingWorkDateConverter x:Key="ExistingWorkDateConverter"/>
+        <Style x:Key="WorkDateCalendarDay" TargetType="CalendarDayButton">
+            <Style.Triggers>
+                <DataTrigger Value="True">
+                    <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource ExistingWorkDateConverter}">
+                            <Binding/>
+                            <Binding Path="DataContext" RelativeSource="{RelativeSource AncestorType=Calendar}"/>
+                            <Binding Path="DataContext.ExistingDatesVersion" RelativeSource="{RelativeSource AncestorType=Calendar}"/>
+                        </MultiBinding>
+                    </DataTrigger.Binding>
+                    <Setter Property="Background" Value="{StaticResource GreenSoftBrush}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource GreenBrush}"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="ToolTip" Value="Work sessions already added"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WorkDateCalendar" TargetType="Calendar">
+            <Setter Property="CalendarDayButtonStyle" Value="{StaticResource WorkDateCalendarDay}"/>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="4"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Border Grid.Row="0">
+            <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#5C9A4A"/><GradientStop Color="#294A69" Offset="1"/></LinearGradientBrush></Border.Background>
+        </Border>
+        <Grid Grid.Row="1" Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <DockPanel Grid.Row="0" Margin="0,0,0,18">
+            <Button DockPanel.Dock="Right" Content="Refresh" Command="{Binding RefreshCommand}"/>
+            <StackPanel VerticalAlignment="Center"><TextBlock Text="DAILY TIMESHEET" Style="{StaticResource EyebrowText}" Margin="0,0,0,5"/><TextBlock Text="Daily work sessions" FontSize="26" FontWeight="SemiBold"/><TextBlock Text="Tracked Revit activity is read-only. Add only the time that is missing." Style="{StaticResource MutedText}" Margin="0,5,0,0"/></StackPanel>
+        </DockPanel>
+        <Border Grid.Row="1" Style="{StaticResource Panel}" Margin="0,0,0,14">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2.4*"/><ColumnDefinition Width="1*"/></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="WORK DATE" Style="{StaticResource EyebrowText}"/>
+                    <DockPanel>
+                        <DatePicker SelectedDate="{Binding SelectedWorkDate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    DisplayDateEnd="{Binding LatestWorkDate, Mode=OneWay}"
+                                    CalendarStyle="{StaticResource WorkDateCalendar}"
+                                    CalendarOpened="WorkDatePickerCalendarOpened"/>
+                        <Border Margin="12,0,0,0" Padding="10,6" CornerRadius="7" VerticalAlignment="Center">
+                            <Border.Style>
+                                <Style TargetType="Border"><Setter Property="Background" Value="#EEF2F5"/><Style.Triggers><DataTrigger Binding="{Binding SelectedDateHasSessions}" Value="True"><Setter Property="Background" Value="{StaticResource GreenSoftBrush}"/></DataTrigger></Style.Triggers></Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding SelectedDateStatus}" Style="{StaticResource MutedText}"/>
+                        </Border>
+                    </DockPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Margin="30,0,0,0"><TextBlock Text="TOTAL HOURS" Style="{StaticResource EyebrowText}"/><TextBlock Text="{Binding TotalDuration, Mode=OneWay}" FontSize="26" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}"/></StackPanel>
+            </Grid>
+        </Border>
+        <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="0">
+        <Grid Margin="8">
+            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <GroupBox Header="Recorded by Revit">
+                <DataGrid ItemsSource="{Binding TrackedSessions}" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False" HeadersVisibility="Column" Margin="8">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Project" Binding="{Binding ProjectName}" Width="1.5*" IsReadOnly="True"/>
+                        <DataGridTextColumn Header="Scope" Binding="{Binding DetectedScope, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="*"/>
+                        <DataGridTextColumn Header="Engaged" Binding="{Binding Duration}" Width="105" IsReadOnly="True"/>
+                        <DataGridTemplateColumn Width="1.2*">
+                            <DataGridTemplateColumn.Header>
+                                <StackPanel Orientation="Horizontal"><TextBlock Text="Task category"/><TextBlock Text=" *" Foreground="{StaticResource DangerBrush}"/></StackPanel>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.TaskCategories, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding TaskCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Notes" Width="1.4*">
+                            <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </GroupBox>
+            <Button Grid.Row="1" HorizontalAlignment="Left" Content="+ Add work session" Command="{Binding AddManualCommand}" Style="{StaticResource TableButton}" Margin="0,10,0,8"/>
+            <GroupBox Grid.Row="2" Header="Added work sessions">
+                <DockPanel Margin="8">
+                    <DataGrid ItemsSource="{Binding ManualSessions}" SelectedItem="{Binding SelectedManual}" AutoGenerateColumns="False" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Project" Width="2*"><DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Projects, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" TextSearch.TextPath="Name" Text="{Binding ProjectName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Engaged" Width="130">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True"
+                                                  ItemsSource="{Binding DataContext.TimeOptions, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  SelectedItem="{Binding EngagedTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  ItemStringFormat="{}{0:hh\:mm}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Width="*">
+                                <DataGridTemplateColumn.Header>
+                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Task category"/><TextBlock Text=" *" Foreground="{StaticResource DangerBrush}"/></StackPanel>
+                                </DataGridTemplateColumn.Header>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True"
+                                                  ItemsSource="{Binding DataContext.TaskCategories, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                  Text="{Binding TaskCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="*"/>
+                            <DataGridTemplateColumn Width="80"><DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="Remove" Command="{Binding DataContext.RemoveManualCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Style="{StaticResource TableButton}"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </GroupBox>
+        </Grid>
+        </Border>
+        <DockPanel Grid.Row="3" Margin="0,14,0,0">
+            <Button DockPanel.Dock="Right" Content="Submit daily work" Command="{Binding SubmitCommand}" Style="{StaticResource PrimaryButton}"/>
+            <Border BorderThickness="1" CornerRadius="8" Padding="11,8" Margin="0,4,12,4">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource GreenSoftBrush}"/>
+                        <Setter Property="BorderBrush" Value="#D3E5C9"/>
+                        <Style.Triggers><DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Background" Value="#FBEAE6"/><Setter Property="BorderBrush" Value="#ECCAC2"/></DataTrigger></Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource GreenDarkBrush}"/><Style.Triggers><DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Foreground" Value="{StaticResource DangerBrush}"/><Setter Property="FontWeight" Value="SemiBold"/></DataTrigger></Style.Triggers></Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Border>
+        </DockPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,48 @@
+<Window x:Class="ParallelSystems.DesktopNotifier.Views.ExistingWorkSessionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Existing work session" Icon="/Assets/logo-mark.ico"
+        Width="520" SizeToContent="Height" WindowStyle="None"
+        AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
+        ShowInTaskbar="False" WindowStartupLocation="CenterOwner">
+    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1" CornerRadius="12">
+        <Border.Effect><DropShadowEffect Color="#1E2B23" BlurRadius="28" ShadowDepth="8" Opacity="0.22"/></Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="4"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+            <Border Grid.Row="0" CornerRadius="12,12,0,0">
+                <Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#C17A2B"/><GradientStop Color="#294A69" Offset="1"/></LinearGradientBrush></Border.Background>
+            </Border>
+            <Grid Grid.Row="1" Margin="26,24">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" Margin="0,0,0,18">
+                    <Button DockPanel.Dock="Right" Content="×" Padding="8,4" Click="CancelClicked" ToolTip="Close"/>
+                    <Border Width="42" Height="42" CornerRadius="9" Background="{StaticResource TraceSoftBrush}" Margin="0,0,13,0">
+                        <TextBlock Text="!" FontSize="22" FontWeight="Bold" Foreground="#7A4D16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel><TextBlock Text="EXISTING WORK SESSION" Style="{StaticResource EyebrowText}"/><TextBlock Text="Add another work session?" FontSize="21" FontWeight="SemiBold" Margin="0,4,0,0"/></StackPanel>
+                </DockPanel>
+                <TextBlock Grid.Row="1" TextWrapping="Wrap" Margin="0,0,0,16" Foreground="{StaticResource MutedBrush}">
+                    This device already has <Run Text="{Binding SessionCount}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}"/> existing work session(s) for <Run Text="{Binding WorkDate}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}"/>.
+                </TextBlock>
+                <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="15" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition Height="8"/><RowDefinition/></Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Recorded work" Style="{StaticResource MutedText}"/><TextBlock Grid.Column="1" Text="{Binding Recorded}" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}"/>
+                        <TextBlock Grid.Row="1" Text="Additional time" Style="{StaticResource MutedText}" Margin="0,8,0,0"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Additional}" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}" Margin="0,8,0,0"/>
+                        <Separator Grid.Row="2" Grid.ColumnSpan="2" Margin="0,6" Background="{StaticResource BorderBrush}"/>
+                        <TextBlock Grid.Row="3" Text="TOTAL HOURS" Style="{StaticResource EyebrowText}" Margin="0,8,0,0"/><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Total}" FontFamily="Consolas" FontSize="22" FontWeight="Bold" Foreground="{StaticResource GreenDarkBrush}" Margin="0,5,0,0"/>
+                    </Grid>
+                </Border>
+                <Border Grid.Row="3" Background="{StaticResource TraceSoftBrush}" BorderBrush="#ECD3AC" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,18">
+                    <TextBlock Text="Continuing will add another work session to this date. Review the existing total before proceeding." TextWrapping="Wrap" Foreground="#7A4D16" FontSize="12"/>
+                </Border>
+                <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="Cancel" MinWidth="90" IsCancel="True" Click="CancelClicked"/>
+                    <Button Content="Yes, add another" MinWidth="155" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="ConfirmClicked"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

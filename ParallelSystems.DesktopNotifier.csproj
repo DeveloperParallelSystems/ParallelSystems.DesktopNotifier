@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ParallelSystems.DesktopNotifier</AssemblyName>
+    <AssemblyTitle>Parallel Systems Timesheet</AssemblyTitle>
+    <Product>Parallel Systems Timesheet</Product>
+    <Description>Daily work-session reminder and timesheet submission application.</Description>
+    <Company>Parallel Systems</Company>
+    <ApplicationIcon>Assets\logo-mark.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="notifier.settings.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None>
+    <Resource Include="Assets\logo.png" />
+    <Resource Include="Assets\logo-mark.png" />
+    <Resource Include="Assets\logo-mark.ico" />
+  </ItemGroup>
+</Project>

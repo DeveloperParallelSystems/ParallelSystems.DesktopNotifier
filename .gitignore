@@ -1,0 +1,65 @@
+# .NET build output
+/bin/
+/obj/
+/artifacts/
+/publish/
+
+# Visual Studio and user-specific files
+/.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.csproj.user
+
+# JetBrains Rider / ReSharper
+/.idea/
+_ReSharper*/
+*.DotSettings.user
+
+# Visual Studio Code workspace settings
+/.vscode/
+
+# Test results and code coverage
+/TestResult*/
+/TestResults/
+/coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+
+# NuGet packages and generated metadata
+/packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts.json
+
+# Publish profiles and deployment output
+*.publish.xml
+*.pubxml
+*.pubxml.user
+*.azurePubxml
+/PublishScripts/
+
+# Logs, diagnostics, and temporary files
+/logs/
+*.log
+*.tmp
+*.temp
+*.pid
+*.dmp
+
+# Machine-local configuration and environment files
+*.local.json
+.env
+.env.*
+!.env.example
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
