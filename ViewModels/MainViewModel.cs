@@ -77,6 +77,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public double ManualHours => ManualSessions.Sum(x => Math.Max(0, x.EngagedTime.TotalHours));
     public double RemainingHours => Math.Max(0, RequiredHours - ManualHours);
     public double TotalHours => ManualHours;
+    public string ApplicationVersion { get; } =
+        $"v{typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.0.0"}";
     public string RequiredDuration => FormatHours(RequiredHours);
     public string ManualDuration => FormatHours(ManualHours);
     public string RemainingDuration => FormatHours(RemainingHours);

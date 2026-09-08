@@ -106,6 +106,8 @@
 
             <DockPanel Grid.Row="3" Margin="0,14,0,0">
                 <Button DockPanel.Dock="Right" Content="Save manual timesheet" Command="{Binding SubmitCommand}" Style="{StaticResource PrimaryButton}" MinWidth="170"/>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ApplicationVersion}" Style="{StaticResource MutedText}"
+                           VerticalAlignment="Center" Margin="0,0,14,0" ToolTip="Desktop Notifier version"/>
                 <Border BorderThickness="1" CornerRadius="8" Padding="11,8" Margin="0,4,12,4">
                     <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{StaticResource GreenSoftBrush}"/><Setter Property="BorderBrush" Value="#D3E5C9"/><Style.Triggers><DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Background" Value="#FBEAE6"/><Setter Property="BorderBrush" Value="#ECCAC2"/></DataTrigger></Style.Triggers></Style></Border.Style>
                     <TextBlock Text="{Binding Status}" VerticalAlignment="Center" TextWrapping="Wrap">
