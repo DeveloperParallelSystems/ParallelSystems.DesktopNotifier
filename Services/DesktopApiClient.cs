@@ -13,7 +13,14 @@ public sealed class DesktopApiClient
         _client = new HttpClient { BaseAddress = new Uri(settings.ApiBaseUrl + "/"), Timeout = TimeSpan.FromSeconds(30) };
         _client.DefaultRequestHeaders.Add("X-Tracker-Key", settings.ApiKey);
     }
-    public Task<DeviceModel> EnsureDeviceAsync(string machine) => SendAsync<DeviceModel>(HttpMethod.Post, $"api/desktop/daily-work/devices/ensure?machineName={Uri.EscapeDataString(machine)}");
+    public Task<DeviceModel> EnsureDeviceAsync(string machine)
+    {
+        var osVersion = Environment.OSVersion.VersionString;
+        var architecture = Environment.Is64BitProcess ? "x64" : "x86";
+        return SendAsync<DeviceModel>(HttpMethod.Post,
+            $"api/desktop/daily-work/devices/ensure?machineName={Uri.EscapeDataString(machine)}" +
+            $"&osVersion={Uri.EscapeDataString(osVersion)}&processArchitecture={architecture}");
+    }
     public Task<DailyStatusModel> GetStatusAsync(Guid device, DateOnly date) => SendAsync<DailyStatusModel>(HttpMethod.Get, $"api/desktop/daily-work/status?deviceId={device}&workDate={date:yyyy-MM-dd}");
     public Task<List<DateOnly>> GetSessionDatesAsync(Guid device, DateOnly startDate, DateOnly endDate) =>
         SendAsync<List<DateOnly>>(HttpMethod.Get, $"api/desktop/daily-work/session-dates?deviceId={device}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}");
