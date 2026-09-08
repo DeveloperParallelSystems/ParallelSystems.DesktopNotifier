@@ -1,6 +1,6 @@
 {
-  "ApiBaseUrl": "http://3.24.250.195",
-  "ApiKey": "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx",
+  "ApiBaseUrl": "http://localhost:5185",
+  "ApiKey": "dev-tracker-key-change-me",
   "CheckIntervalMinutes": 1,
   "RequiredHoursPerDay": 8
 }

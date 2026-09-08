@@ -5,14 +5,13 @@ namespace ParallelSystems.DesktopNotifier.Views;
 
 public partial class ConfirmationDialog : Window
 {
-    public ConfirmationDialog(string workDate, string recorded, string additional, string total)
+    public ConfirmationDialog(string workDate, int sessionCount, string total)
     {
         InitializeComponent();
         DataContext = new ConfirmationDialogModel
         {
             WorkDate = workDate,
-            Recorded = recorded,
-            Additional = additional,
+            SessionCount = sessionCount,
             Total = total
         };
         MouseLeftButtonDown += (_, args) =>
@@ -27,8 +26,7 @@ public partial class ConfirmationDialog : Window
     private sealed class ConfirmationDialogModel
     {
         public string WorkDate { get; set; } = string.Empty;
-        public string Recorded { get; set; } = string.Empty;
-        public string Additional { get; set; } = string.Empty;
+        public int SessionCount { get; set; }
         public string Total { get; set; } = string.Empty;
     }
 }

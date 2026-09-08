@@ -19,8 +19,8 @@ public sealed class DesktopApiClient
         SendAsync<List<DateOnly>>(HttpMethod.Get, $"api/desktop/daily-work/session-dates?deviceId={device}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}");
     public Task<List<ExistingManualSessionModel>> GetManualSessionsAsync(Guid device, DateOnly date) =>
         SendAsync<List<ExistingManualSessionModel>>(HttpMethod.Get, $"api/desktop/daily-work/manual-sessions?deviceId={device}&workDate={date:yyyy-MM-dd}");
-    public Task<List<DailyDraftModel>> GetDraftsAsync(Guid device) => SendAsync<List<DailyDraftModel>>(HttpMethod.Get, $"api/desktop/daily-work/drafts?deviceId={device}");
     public Task<List<ProjectModel>> GetProjectsAsync() => SendAsync<List<ProjectModel>>(HttpMethod.Get, "api/desktop/daily-work/projects");
+    public Task<List<ClientModel>> GetClientsAsync() => SendAsync<List<ClientModel>>(HttpMethod.Get, "api/desktop/daily-work/clients");
     public Task<List<string>> GetTaskCategoriesAsync() => SendAsync<List<string>>(HttpMethod.Get, "api/desktop/daily-work/task-categories");
     public async Task<SubmitResponse> SubmitAsync(DailySubmitRequest request)
     {

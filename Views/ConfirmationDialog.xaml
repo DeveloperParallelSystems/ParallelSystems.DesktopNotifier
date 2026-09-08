@@ -47,21 +47,19 @@
 
                 <TextBlock Grid.Row="1" TextWrapping="Wrap" Margin="0,0,0,16"
                            Foreground="{StaticResource MutedBrush}">
-                    You are about to finalize all pending work sessions for
+                    You are about to save the manual work sessions for
                     <Run Text="{Binding WorkDate}" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}"/>.
                 </TextBlock>
 
                 <Border Grid.Row="2" Style="{StaticResource Panel}" Padding="15" Margin="0,0,0,14">
                     <Grid>
-                        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition Height="8"/><RowDefinition/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions><RowDefinition/><RowDefinition Height="8"/><RowDefinition/></Grid.RowDefinitions>
                         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="Recorded by Revit" Style="{StaticResource MutedText}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Recorded}" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}"/>
-                        <TextBlock Grid.Row="1" Text="Additional time" Style="{StaticResource MutedText}" Margin="0,8,0,0"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Additional}" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}" Margin="0,8,0,0"/>
-                        <Separator Grid.Row="2" Grid.ColumnSpan="2" Margin="0,6" Background="{StaticResource BorderBrush}"/>
-                        <TextBlock Grid.Row="3" Text="TOTAL HOURS" Style="{StaticResource EyebrowText}" Margin="0,8,0,0"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Total}" FontFamily="Consolas" FontSize="22" FontWeight="Bold" Foreground="{StaticResource GreenDarkBrush}" Margin="0,5,0,0"/>
+                        <TextBlock Text="Manual sessions" Style="{StaticResource MutedText}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding SessionCount}" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{StaticResource NavyBrush}"/>
+                        <Separator Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6" Background="{StaticResource BorderBrush}"/>
+                        <TextBlock Grid.Row="2" Text="TOTAL HOURS" Style="{StaticResource EyebrowText}" Margin="0,8,0,0"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Total}" FontFamily="Consolas" FontSize="22" FontWeight="Bold" Foreground="{StaticResource GreenDarkBrush}" Margin="0,5,0,0"/>
                     </Grid>
                 </Border>
 
@@ -69,14 +67,13 @@
                         BorderBrush="#ECD3AC" BorderThickness="1" CornerRadius="8"
                         Padding="12" Margin="0,0,0,18">
                     <TextBlock TextWrapping="Wrap" Foreground="#7A4D16" FontSize="12">
-                        Please verify the task categories and additional time. Once submitted,
-                        this daily work session is finalized.
+                        Check each project, duration, task category, client, and level before saving.
                     </TextBlock>
                 </Border>
 
                 <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Cancel" MinWidth="90" IsCancel="True" Click="CancelClicked"/>
-                    <Button Content="Yes, submit daily work" MinWidth="170"
+                    <Button Content="Save manual sessions" MinWidth="170"
                             Style="{StaticResource PrimaryButton}" IsDefault="True" Click="ConfirmClicked"/>
                 </StackPanel>
             </Grid>
