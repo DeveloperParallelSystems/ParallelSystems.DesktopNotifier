@@ -116,5 +116,18 @@
                 </Border>
             </DockPanel>
         </Grid>
+
+        <Border Grid.RowSpan="2" Panel.ZIndex="10" Background="#B3F4F6F2"
+                Visibility="{Binding IsLoadingData, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="10" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    MinWidth="280">
+                <StackPanel>
+                    <TextBlock Text="Loading timesheet data..." FontSize="14" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <ProgressBar IsIndeterminate="True" Height="5" Foreground="{StaticResource GreenBrush}"/>
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </Window>

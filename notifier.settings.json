@@ -2,5 +2,7 @@
   "ApiBaseUrl": "http://localhost:5185",
   "ApiKey": "dev-tracker-key-change-me",
   "CheckIntervalMinutes": 1,
-  "RequiredHoursPerDay": 8
+  "RequiredHoursPerDay": 8,
+  "MorningNotificationTime": "08:00",
+  "AfternoonNotificationTime": "16:00"
 }

@@ -20,23 +20,18 @@ public partial class App : System.Windows.Application
             var api = new DesktopApiClient(settings);
             _notifications = new NotificationService();
             _viewModel = new MainViewModel(api, settings, new ConfirmationService(),
-                new ReminderDismissalStore());
+                new NotificationStateStore());
             _window = new MainWindow { DataContext = _viewModel };
             _window.Closing += (_, args) => { args.Cancel = true; _window.Hide(); };
-            _notifications.OpenRequested += async (_, _) =>
+            _notifications.OpenRequested += (_, request) =>
             {
-                await _viewModel.OpenFromNotificationAsync();
                 _window.Show();
                 _window.WindowState = WindowState.Normal;
                 _window.Activate();
+                _viewModel.OpenFromNotification(request.WorkDate);
             };
             _notifications.ExitRequested += (_, _) => Shutdown();
-            _notifications.ManualDismissRequested += (_, _) => _viewModel.DismissCurrentReminder();
-            _viewModel.NotificationRequested += (_, message) =>
-            {
-                if (_window?.IsVisible != true)
-                    _notifications.Show(message);
-            };
+            _viewModel.NotificationRequested += (_, notification) => _notifications.Show(notification);
             _viewModel.NotificationDismissRequested += (_, _) => _notifications.Dismiss();
             await _viewModel.InitializeAsync();
         }

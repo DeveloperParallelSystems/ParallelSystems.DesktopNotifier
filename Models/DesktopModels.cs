@@ -12,6 +12,18 @@ public sealed class DailyStatusModel
 public sealed class ProjectModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class ClientModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 
+public sealed class TimesheetNotificationEventArgs : EventArgs
+{
+    public required DateOnly WorkDate { get; init; }
+    public required string Title { get; init; }
+    public required string Message { get; init; }
+}
+
+public sealed class NotificationOpenRequestedEventArgs : EventArgs
+{
+    public DateOnly? WorkDate { get; init; }
+}
+
 public sealed class ManualSessionModel : INotifyPropertyChanged
 {
     public Guid? Id { get; set; }

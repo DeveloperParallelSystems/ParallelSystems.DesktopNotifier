@@ -14,18 +14,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly DesktopApiClient _api;
     private readonly AppSettings _settings;
     private readonly IConfirmationService _confirmation;
-    private readonly ReminderDismissalStore _dismissalStore;
+    private readonly NotificationStateStore _notificationStateStore;
     private readonly CancellationTokenSource _stop = new();
+    private readonly NotificationProcessingState _notificationState;
     private DeviceModel? _device;
-    private DateOnly? _selectedDate;
+    private DateOnly? _selectedDate = DateOnly.FromDateTime(DateTime.Today);
     private string _selectedDateStatus = "Select a date to review its work sessions.";
     private bool _selectedDateHasSessions;
     private int _dateStatusRequest;
     private int _existingDatesVersion;
+    private int _dataLoadCount;
     private string _status = "Starting...";
     private bool _hasError;
     private bool _busy;
-    private DateOnly? _dismissedReminderDate;
     private readonly HashSet<DateOnly> _existingDateOverrides = [];
     private readonly HashSet<DateOnly> _existingWorkDates = [];
     private readonly HashSet<Guid> _deletedManualSessionIds = [];
@@ -40,7 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public AsyncRelayCommand SubmitCommand { get; }
     public RelayCommand AddManualCommand { get; }
     public RelayCommand RemoveManualCommand { get; }
-    public event EventHandler<string>? NotificationRequested;
+    public event EventHandler<TimesheetNotificationEventArgs>? NotificationRequested;
     public event EventHandler? NotificationDismissRequested;
 
     public DateOnly? SelectedDate
@@ -71,6 +72,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public int ExistingDatesVersion { get => _existingDatesVersion; private set => Set(ref _existingDatesVersion, value); }
     public string Status { get => _status; private set => Set(ref _status, value); }
     public bool HasError { get => _hasError; private set => Set(ref _hasError, value); }
+    public bool IsLoadingData => _dataLoadCount > 0;
     public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) { OnPropertyChanged(nameof(IsEditingEnabled)); SubmitCommand.RaiseCanExecuteChanged(); AddManualCommand.RaiseCanExecuteChanged(); } } }
     public bool IsEditingEnabled => !IsBusy;
     public double RequiredHours => _settings.RequiredHoursPerDay;
@@ -78,18 +80,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public double RemainingHours => Math.Max(0, RequiredHours - ManualHours);
     public double TotalHours => ManualHours;
     public string ApplicationVersion { get; } =
-        $"v{typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.0.0"}";
+        $"v{typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "1.1.0"}";
     public string RequiredDuration => FormatHours(RequiredHours);
     public string ManualDuration => FormatHours(ManualHours);
     public string RemainingDuration => FormatHours(RemainingHours);
     public string TotalDuration => FormatHours(TotalHours);
 
     public MainViewModel(DesktopApiClient api, AppSettings settings, IConfirmationService confirmation,
-        ReminderDismissalStore dismissalStore)
+        NotificationStateStore notificationStateStore)
     {
         _api = api; _settings = settings; _confirmation = confirmation;
-        _dismissalStore = dismissalStore;
-        _dismissedReminderDate = _dismissalStore.Read();
+        _notificationStateStore = notificationStateStore;
+        _notificationState = _notificationStateStore.Read();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
             !IsBusy && SelectedDate.HasValue &&
@@ -107,66 +109,136 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task InitializeAsync()
     {
-        _device = await _api.EnsureDeviceAsync(Environment.MachineName);
-        var projectsTask = _api.GetProjectsAsync();
-        var clientsTask = _api.GetClientsAsync();
-        var categoriesTask = _api.GetTaskCategoriesAsync();
-        foreach (var project in await projectsTask) Projects.Add(project);
-        foreach (var client in await clientsTask) Clients.Add(client);
-        foreach (var category in await categoriesTask) TaskCategories.Add(category);
-        await CheckYesterdayAsync();
-        _ = PollAsync(_stop.Token);
-        SetStatus($"Monitoring {Environment.MachineName} every {_settings.CheckIntervalMinutes} minutes.");
+        BeginDataLoad();
+        try
+        {
+            _device = await _api.EnsureDeviceAsync(Environment.MachineName);
+            var projectsTask = _api.GetProjectsAsync();
+            var clientsTask = _api.GetClientsAsync();
+            var categoriesTask = _api.GetTaskCategoriesAsync();
+            try { await ProcessDueNotificationsAsync(DateTime.Now); }
+            catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
+            foreach (var project in await projectsTask) Projects.Add(project);
+            foreach (var client in await clientsTask) Clients.Add(client);
+            foreach (var category in await categoriesTask) TaskCategories.Add(category);
+            await RefreshSelectedDateStatusAsync(SelectedDate);
+            _ = PollAsync(_stop.Token);
+            if (!HasError)
+                SetStatus($"Monitoring {Environment.MachineName}. Morning: {_settings.MorningNotificationAt:HH:mm}; afternoon: {_settings.AfternoonNotificationAt:HH:mm}.");
+        }
+        finally { EndDataLoad(); }
     }
 
-    public async Task OpenFromNotificationAsync()
+    public void OpenFromNotification(DateOnly? workDate = null)
     {
         if (_device is null) return;
-        SelectedDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
-        await RefreshSelectedDateStatusAsync(SelectedDate);
-    }
-
-    public void DismissCurrentReminder()
-    {
-        _dismissedReminderDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
-        _dismissalStore.Write(_dismissedReminderDate.Value);
-        SetStatus("Today's reminder was dismissed. The next daily reminder will be tomorrow.");
-    }
-
-    private async Task CheckYesterdayAsync()
-    {
-        if (_device is null) return;
-        var yesterday = DateOnly.FromDateTime(DateTime.Today.AddDays(-1));
-        // Re-read on every poll so deleting the dismissal file re-enables the
-        // reminder without requiring the notifier to be restarted.
-        _dismissedReminderDate = _dismissalStore.Read();
-        var result = await _api.GetStatusAsync(_device.Id, yesterday);
-        if (_dismissedReminderDate == yesterday) return;
-        if (result.AdditionalSeconds <= 0)
-            NotificationRequested?.Invoke(this, "No manual timesheet exists for yesterday. Click to add one, or close (X) to dismiss for today.");
+        var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.Today);
+        if (SelectedDate == targetDate)
+            _ = RefreshSelectedDateStatusAsync(targetDate);
         else
-            NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
+            SelectedDate = targetDate;
+    }
+
+    private async Task ProcessDueNotificationsAsync(DateTime now)
+    {
+        if (_device is null) return;
+        var processingDate = DateOnly.FromDateTime(now);
+        var currentTime = TimeOnly.FromDateTime(now);
+
+        if (_notificationState.MorningProcessedDate != processingDate &&
+            currentTime >= _settings.MorningNotificationAt)
+        {
+            await ProcessMorningNotificationAsync(
+                processingDate,
+                processingDate.AddDays(-1),
+                "Morning timesheet reminder",
+                "No manual timesheet exists for yesterday. Click to add one.");
+        }
+
+        if (_notificationState.AfternoonProcessedDate != processingDate &&
+            currentTime >= _settings.AfternoonNotificationAt)
+        {
+            ProcessAfternoonReminder(processingDate);
+        }
+    }
+
+    private async Task ProcessMorningNotificationAsync(
+        DateOnly processingDate, DateOnly workDate, string title, string message)
+    {
+        var result = await _api.GetStatusAsync(_device!.Id, workDate);
+        _notificationState.MorningProcessedDate = processingDate;
+        _notificationStateStore.Write(_notificationState);
+
+        if (result.AdditionalSeconds <= 0)
+        {
+            NotificationRequested?.Invoke(this, new TimesheetNotificationEventArgs
+            {
+                WorkDate = workDate,
+                Title = title,
+                Message = message
+            });
+        }
+    }
+
+    private void ProcessAfternoonReminder(DateOnly processingDate)
+    {
+        _notificationState.AfternoonProcessedDate = processingDate;
+        _notificationStateStore.Write(_notificationState);
+        NotificationRequested?.Invoke(this, new TimesheetNotificationEventArgs
+        {
+            WorkDate = processingDate,
+            Title = "Today's timesheet reminder",
+            Message = "Don't forget to fill in your timesheet for today. Click here to open it."
+        });
     }
 
     private async Task PollAsync(CancellationToken token)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(_settings.CheckIntervalMinutes));
         try
         {
-            while (await timer.WaitForNextTickAsync(token))
+            while (true)
             {
-                try { await CheckYesterdayAsync(); }
-                catch (HttpRequestException ex) { SetStatus($"Reminder check failed: {ex.Message}", true); }
-                catch (TaskCanceledException) when (!token.IsCancellationRequested) { SetStatus("Reminder check timed out. Retrying automatically.", true); }
+                await Task.Delay(GetNextNotificationCheckDelay(DateTime.Now), token);
+                try { await ProcessDueNotificationsAsync(DateTime.Now); }
+                catch (HttpRequestException ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
+                catch (TaskCanceledException) when (!token.IsCancellationRequested) { SetStatus("Notification check timed out. Retrying automatically.", true); }
+                catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    private TimeSpan GetNextNotificationCheckDelay(DateTime now)
+    {
+        var processingDate = DateOnly.FromDateTime(now);
+        var currentTime = TimeOnly.FromDateTime(now);
+        var pollingDelay = TimeSpan.FromMinutes(_settings.CheckIntervalMinutes);
+        var retryDelay = TimeSpan.FromMinutes(1);
+
+        var morningIsOverdue = _notificationState.MorningProcessedDate != processingDate &&
+                               currentTime >= _settings.MorningNotificationAt;
+        var afternoonIsOverdue = _notificationState.AfternoonProcessedDate != processingDate &&
+                                 currentTime >= _settings.AfternoonNotificationAt;
+        if (morningIsOverdue || afternoonIsOverdue)
+            return pollingDelay < retryDelay ? pollingDelay : retryDelay;
+
+        var morning = now.Date.Add(_settings.MorningNotificationAt.ToTimeSpan());
+        if (morning <= now || _notificationState.MorningProcessedDate == processingDate)
+            morning = morning.AddDays(1);
+
+        var afternoon = now.Date.Add(_settings.AfternoonNotificationAt.ToTimeSpan());
+        if (afternoon <= now || _notificationState.AfternoonProcessedDate == processingDate)
+            afternoon = afternoon.AddDays(1);
+
+        var scheduledDelay = (morning < afternoon ? morning : afternoon) - now;
+        return scheduledDelay < pollingDelay ? scheduledDelay : pollingDelay;
     }
 
     private async Task RefreshAsync()
     {
         if (_device is null) return;
         IsBusy = true;
+        BeginDataLoad();
         try
         {
             SelectedDate ??= DateOnly.FromDateTime(DateTime.Today);
@@ -180,7 +252,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 : $"Loaded {ManualSessions.Count} manual session(s).");
         }
         catch (Exception ex) { SetStatus(ex.Message, true); }
-        finally { IsBusy = false; }
+        finally { EndDataLoad(); IsBusy = false; }
     }
 
     private void AddManual()
@@ -206,6 +278,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SelectedDateStatus = "Choose today or an earlier date.";
             return;
         }
+        BeginDataLoad();
         try
         {
             var statusTask = _api.GetStatusAsync(_device.Id, date.Value);
@@ -242,6 +315,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (request == _dateStatusRequest)
                 SelectedDateStatus = $"Could not check existing sessions: {ex.Message}";
         }
+        finally { EndDataLoad(); }
     }
 
     public bool HasExistingWorkSessions(DateTime date) =>
@@ -253,6 +327,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         var monthStart = new DateOnly(displayDate.Year, displayDate.Month, 1);
         var start = monthStart.AddDays(-7);
         var end = monthStart.AddMonths(1).AddDays(7);
+        BeginDataLoad();
         try
         {
             var dates = await _api.GetSessionDatesAsync(_device.Id, start, end);
@@ -260,6 +335,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             ExistingDatesVersion++;
         }
         catch (Exception ex) { SetStatus($"Could not load calendar indicators: {ex.Message}", true); }
+        finally { EndDataLoad(); }
     }
 
     private async Task SubmitAsync()
@@ -345,6 +421,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         Status = message;
         HasError = isError;
+    }
+    private void BeginDataLoad()
+    {
+        if (_dataLoadCount++ == 0) OnPropertyChanged(nameof(IsLoadingData));
+    }
+    private void EndDataLoad()
+    {
+        if (_dataLoadCount > 0 && --_dataLoadCount == 0)
+            OnPropertyChanged(nameof(IsLoadingData));
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null) { if (EqualityComparer<T>.Default.Equals(field, value)) return false; field = value; OnPropertyChanged(name); return true; }
