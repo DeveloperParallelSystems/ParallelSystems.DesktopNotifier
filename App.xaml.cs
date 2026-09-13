@@ -7,6 +7,8 @@ namespace ParallelSystems.DesktopNotifier;
 
 public partial class App : System.Windows.Application
 {
+    private const string SingleInstanceMutexName = @"Local\ParallelSystems.DesktopNotifier.SingleInstance";
+    private Mutex? _singleInstanceMutex;
     private MainViewModel? _viewModel;
     private MainWindow? _window;
     private NotificationService? _notifications;
@@ -14,6 +16,15 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out var isFirstInstance);
+        if (!isFirstInstance)
+        {
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+            Shutdown();
+            return;
+        }
+
         try
         {
             var settings = AppSettings.Load();
@@ -46,6 +57,12 @@ public partial class App : System.Windows.Application
     {
         _viewModel?.Dispose();
         _notifications?.Dispose();
+        if (_singleInstanceMutex is not null)
+        {
+            _singleInstanceMutex.ReleaseMutex();
+            _singleInstanceMutex.Dispose();
+            _singleInstanceMutex = null;
+        }
         base.OnExit(e);
     }
 }
