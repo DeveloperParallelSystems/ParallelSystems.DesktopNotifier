@@ -95,7 +95,18 @@
                             <DataGridTemplateColumn Header="Level" Width="1*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="Notes" Binding="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="1.2*"/>
+                            <DataGridTextColumn Header="Notes" Binding="{Binding Notes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="1.2*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                                <DataGridTextColumn.EditingElementStyle>
+                                    <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                    </Style>
+                                </DataGridTextColumn.EditingElementStyle>
+                            </DataGridTextColumn>
                             <DataGridTemplateColumn Width="82">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><Button Content="Remove" Command="{Binding DataContext.RemoveManualCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Style="{StaticResource TableButton}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
