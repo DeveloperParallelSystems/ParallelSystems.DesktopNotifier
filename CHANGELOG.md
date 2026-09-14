@@ -26,6 +26,7 @@ Add changes here as they are completed. Move them into a dated version section w
 - Simplified the daily summary by placing remaining hours beneath the day target.
 - Enlarged and restyled the work-date calendar with clearer date states and month navigation indicators.
 - Increased and vertically centered the selected work-date text for better use of the date field.
+- Limited project and client dropdown suggestions to records managed through the web application while keeping both fields editable.
 
 ### Fixed
 
