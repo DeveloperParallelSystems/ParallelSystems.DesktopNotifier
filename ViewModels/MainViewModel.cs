@@ -14,6 +14,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly DesktopApiClient _api;
     private readonly AppSettings _settings;
     private readonly IConfirmationService _confirmation;
+    private readonly INotificationSettingsService _notificationSettings;
     private readonly NotificationStateStore _notificationStateStore;
     private readonly CancellationTokenSource _stop = new();
     private readonly NotificationProcessingState _notificationState;
@@ -39,6 +40,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Enumerable.Range(0, 96).Select(index => TimeSpan.FromMinutes(index * 15)).ToList();
     public AsyncRelayCommand RefreshCommand { get; }
     public AsyncRelayCommand SubmitCommand { get; }
+    public RelayCommand NotificationSettingsCommand { get; }
     public RelayCommand AddManualCommand { get; }
     public RelayCommand RemoveManualCommand { get; }
     public event EventHandler<TimesheetNotificationEventArgs>? NotificationRequested;
@@ -87,12 +89,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string TotalDuration => FormatHours(TotalHours);
 
     public MainViewModel(DesktopApiClient api, AppSettings settings, IConfirmationService confirmation,
-        NotificationStateStore notificationStateStore)
+        INotificationSettingsService notificationSettings, NotificationStateStore notificationStateStore)
     {
         _api = api; _settings = settings; _confirmation = confirmation;
+        _notificationSettings = notificationSettings;
         _notificationStateStore = notificationStateStore;
         _notificationState = _notificationStateStore.Read();
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
+        NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule());
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
             !IsBusy && SelectedDate.HasValue &&
             (ManualSessions.Count > 0 || _deletedManualSessionIds.Count > 0));
@@ -124,7 +128,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             await RefreshSelectedDateStatusAsync(SelectedDate);
             _ = PollAsync(_stop.Token);
             if (!HasError)
-                SetStatus($"Monitoring {Environment.MachineName}. Morning: {_settings.MorningNotificationAt:HH:mm}; afternoon: {_settings.AfternoonNotificationAt:HH:mm}.");
+                SetStatus($"Monitoring {Environment.MachineName}. Morning: {_settings.MorningNotificationAt:HH:mm}; evening: {_settings.AfternoonNotificationAt:HH:mm}.");
         }
         finally { EndDataLoad(); }
     }
@@ -152,13 +156,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 processingDate,
                 processingDate.AddDays(-1),
                 "Morning timesheet reminder",
-                "No manual timesheet exists for yesterday. Click to add one.");
+                "No timesheet exists for yesterday. Click to add one.");
         }
 
         if (_notificationState.AfternoonProcessedDate != processingDate &&
             currentTime >= _settings.AfternoonNotificationAt)
         {
-            ProcessAfternoonReminder(processingDate);
+            ProcessEveningReminder(processingDate);
         }
     }
 
@@ -180,7 +184,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private void ProcessAfternoonReminder(DateOnly processingDate)
+    private void ProcessEveningReminder(DateOnly processingDate)
     {
         _notificationState.AfternoonProcessedDate = processingDate;
         _notificationStateStore.Write(_notificationState);
@@ -217,20 +221,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         var morningIsOverdue = _notificationState.MorningProcessedDate != processingDate &&
                                currentTime >= _settings.MorningNotificationAt;
-        var afternoonIsOverdue = _notificationState.AfternoonProcessedDate != processingDate &&
-                                 currentTime >= _settings.AfternoonNotificationAt;
-        if (morningIsOverdue || afternoonIsOverdue)
+        var eveningIsOverdue = _notificationState.AfternoonProcessedDate != processingDate &&
+                               currentTime >= _settings.AfternoonNotificationAt;
+        if (morningIsOverdue || eveningIsOverdue)
             return pollingDelay < retryDelay ? pollingDelay : retryDelay;
 
         var morning = now.Date.Add(_settings.MorningNotificationAt.ToTimeSpan());
         if (morning <= now || _notificationState.MorningProcessedDate == processingDate)
             morning = morning.AddDays(1);
 
-        var afternoon = now.Date.Add(_settings.AfternoonNotificationAt.ToTimeSpan());
-        if (afternoon <= now || _notificationState.AfternoonProcessedDate == processingDate)
-            afternoon = afternoon.AddDays(1);
+        var evening = now.Date.Add(_settings.AfternoonNotificationAt.ToTimeSpan());
+        if (evening <= now || _notificationState.AfternoonProcessedDate == processingDate)
+            evening = evening.AddDays(1);
 
-        var scheduledDelay = (morning < afternoon ? morning : afternoon) - now;
+        var scheduledDelay = (morning < evening ? morning : evening) - now;
         return scheduledDelay < pollingDelay ? scheduledDelay : pollingDelay;
     }
 
@@ -248,8 +252,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Clients.Clear();
             foreach (var client in clients) Clients.Add(client);
             SetStatus(ManualSessions.Count == 0
-                ? "No manual sessions for the selected date."
-                : $"Loaded {ManualSessions.Count} manual session(s).");
+                ? "No sessions for the selected date."
+                : $"Loaded {ManualSessions.Count} session(s).");
         }
         catch (Exception ex) { SetStatus(ex.Message, true); }
         finally { EndDataLoad(); IsBusy = false; }
@@ -307,8 +311,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             }
             SelectedDateHasSessions = existingManualSessions.Count > 0;
             SelectedDateStatus = existingManualSessions.Count > 0
-                ? $"{existingManualSessions.Count} manual session(s) already saved for this date."
-                : "No manual sessions have been saved for this date.";
+                ? $"{existingManualSessions.Count} session(s) already saved for this date."
+                : "No sessions have been saved for this date.";
         }
         catch (Exception ex)
         {
@@ -353,7 +357,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 if (string.IsNullOrWhiteSpace(item.ProjectName)) throw new InvalidOperationException("Project is required for every added session.");
                 if (item.EngagedTime <= TimeSpan.Zero || item.EngagedTime > TimeSpan.FromHours(24))
-                    throw new InvalidOperationException("Engaged time must be greater than zero and no more than 24 hours.");
+                    throw new InvalidOperationException("Hours must be greater than zero and no more than 24.");
                 if (string.IsNullOrWhiteSpace(item.TaskCategory)) throw new InvalidOperationException("Task category is required for every added session.");
                 if (string.IsNullOrWhiteSpace(item.ClientName)) throw new InvalidOperationException("Client is required for every added session.");
             }
@@ -392,7 +396,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             };
             var result = await _api.SubmitAsync(request);
             NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
-            SetStatus($"Manual sessions saved: {result.CreatedManualSessions} added, {result.UpdatedManualSessions} updated, {result.DeletedManualSessions} removed.");
+            SetStatus($"Sessions saved: {result.CreatedManualSessions} added, {result.UpdatedManualSessions} updated, {result.DeletedManualSessions} removed.");
             _existingDateOverrides.Remove(workDate);
             _deletedManualSessionIds.Clear();
             ManualSessions.Clear();
@@ -415,7 +419,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private static string FormatHours(double hours)
     {
         var duration = TimeSpan.FromHours(Math.Max(0, hours));
-        return $"{(int)duration.TotalHours:00}:{duration.Minutes:00}:{duration.Seconds:00}";
+        return $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";
+    }
+    private void EditNotificationSchedule()
+    {
+        var schedule = _notificationSettings.Edit(
+            _settings.MorningNotificationAt, _settings.AfternoonNotificationAt);
+        if (schedule is null) return;
+
+        try
+        {
+            _settings.SaveNotificationSchedule(schedule.Morning, schedule.Evening);
+            SetStatus($"Notification schedule saved. Morning: {schedule.Morning:HH:mm}; evening: {schedule.Evening:HH:mm}.");
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+        {
+            SetStatus($"Could not save notification schedule: {ex.Message}", true);
+        }
     }
     private void SetStatus(string message, bool isError = false)
     {
