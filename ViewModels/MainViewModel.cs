@@ -124,6 +124,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
             foreach (var project in await projectsTask) Projects.Add(project);
             foreach (var client in await clientsTask) Clients.Add(client);
+            TaskCategories.Clear();
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             _ = PollAsync(_stop.Token);
@@ -248,7 +249,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SelectedDate ??= DateOnly.FromDateTime(DateTime.Today);
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
-            await Task.WhenAll(projectsTask, clientsTask);
+            var categoriesTask = _api.GetTaskCategoriesAsync();
+            await Task.WhenAll(projectsTask, clientsTask, categoriesTask);
             var projects = await projectsTask;
             Projects.Clear();
             foreach (var project in projects) Projects.Add(project);
@@ -256,6 +258,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var clients = await clientsTask;
             Clients.Clear();
             foreach (var client in clients) Clients.Add(client);
+            TaskCategories.Clear();
+            foreach (var category in await categoriesTask) TaskCategories.Add(category);
             SetStatus(ManualSessions.Count == 0
                 ? "No sessions for the selected date."
                 : $"Loaded {ManualSessions.Count} session(s).");
