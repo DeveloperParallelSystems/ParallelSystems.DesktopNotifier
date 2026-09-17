@@ -246,7 +246,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             SelectedDate ??= DateOnly.FromDateTime(DateTime.Today);
+            var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
+            await Task.WhenAll(projectsTask, clientsTask);
+            var projects = await projectsTask;
+            Projects.Clear();
+            foreach (var project in projects) Projects.Add(project);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             var clients = await clientsTask;
             Clients.Clear();
