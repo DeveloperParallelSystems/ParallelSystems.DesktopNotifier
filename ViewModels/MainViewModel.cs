@@ -43,6 +43,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand NotificationSettingsCommand { get; }
     public RelayCommand AddManualCommand { get; }
     public RelayCommand RemoveManualCommand { get; }
+    public MissingTimesheetAlertViewModel WorkDateAlert { get; }
+    public RelayCommand DismissWorkDateAlertCommand { get; }
     public event EventHandler<TimesheetNotificationEventArgs>? NotificationRequested;
     public event EventHandler? NotificationDismissRequested;
 
@@ -95,6 +97,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _notificationSettings = notificationSettings;
         _notificationStateStore = notificationStateStore;
         _notificationState = _notificationStateStore.Read();
+        // Tracked sessions and drafts alone do not count as a submitted timesheet.
+        WorkDateAlert = new MissingTimesheetAlertViewModel(async date =>
+            (await _api.GetStatusAsync(_device!.Id, date)).AdditionalSeconds > 0,
+            _notificationState.DismissedMissingTimesheetWorkDate);
+        DismissWorkDateAlertCommand = new RelayCommand(_ =>
+        {
+            WorkDateAlert.Dismiss();
+            _notificationState.DismissedMissingTimesheetWorkDate = WorkDateAlert.DismissedWorkDate;
+            _notificationStateStore.Write(_notificationState);
+        });
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule());
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
@@ -117,6 +129,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             _device = await _api.EnsureDeviceAsync(Environment.MachineName);
+            await RefreshWorkDateAlertAsync();
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
@@ -137,6 +150,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void OpenFromNotification(DateOnly? workDate = null)
     {
         if (_device is null) return;
+        _ = RefreshWorkDateAlertAsync();
         var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.Today);
         if (SelectedDate == targetDate)
             _ = RefreshSelectedDateStatusAsync(targetDate);
@@ -204,6 +218,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             while (true)
             {
                 await Task.Delay(GetNextNotificationCheckDelay(DateTime.Now), token);
+                await RefreshWorkDateAlertAsync();
                 try { await ProcessDueNotificationsAsync(DateTime.Now); }
                 catch (HttpRequestException ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
                 catch (TaskCanceledException) when (!token.IsCancellationRequested) { SetStatus("Notification check timed out. Retrying automatically.", true); }
@@ -246,6 +261,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         BeginDataLoad();
         try
         {
+            await RefreshWorkDateAlertAsync();
             SelectedDate ??= DateOnly.FromDateTime(DateTime.Today);
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
@@ -404,6 +420,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 }).ToList()
             };
             var result = await _api.SubmitAsync(request);
+            if (request.ManualSessions.Count > 0) WorkDateAlert.RecordSubmission(workDate);
             NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
             SetStatus($"Sessions saved: {result.CreatedManualSessions} added, {result.UpdatedManualSessions} updated, {result.DeletedManualSessions} removed.");
             _existingDateOverrides.Remove(workDate);
@@ -413,6 +430,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex) { SetStatus(ex.Message, true); }
         finally { IsBusy = false; }
+    }
+
+    private async Task RefreshWorkDateAlertAsync()
+    {
+        if (_device is null) return;
+        try { await WorkDateAlert.RefreshAsync(); }
+        catch (Exception ex) { SetStatus($"Could not check yesterday's timesheet: {ex.Message}", true); }
     }
 
     private void RaiseSummary()
