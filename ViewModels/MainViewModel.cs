@@ -381,10 +381,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             foreach (var item in ManualSessions)
             {
                 if (string.IsNullOrWhiteSpace(item.ProjectName)) throw new InvalidOperationException("Project is required for every added session.");
+                if (!Projects.Any(project => string.Equals(project.Name, item.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Select an existing project for every added session.");
                 if (item.EngagedTime <= TimeSpan.Zero || item.EngagedTime > TimeSpan.FromHours(24))
                     throw new InvalidOperationException("Hours must be greater than zero and no more than 24.");
                 if (string.IsNullOrWhiteSpace(item.TaskCategory)) throw new InvalidOperationException("Task category is required for every added session.");
                 if (string.IsNullOrWhiteSpace(item.ClientName)) throw new InvalidOperationException("Client is required for every added session.");
+                if (!Clients.Any(client => string.Equals(client.Name, item.ClientName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Select an existing client for every added session.");
             }
             if (!_confirmation.ConfirmDailySubmission(
                     workDate, ManualSessions.Count, TotalDuration))
