@@ -43,6 +43,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand NotificationSettingsCommand { get; }
     public RelayCommand AddManualCommand { get; }
     public RelayCommand RemoveManualCommand { get; }
+    public MissingTimesheetAlertViewModel WorkDateAlert { get; }
+    public RelayCommand DismissWorkDateAlertCommand { get; }
     public event EventHandler<TimesheetNotificationEventArgs>? NotificationRequested;
     public event EventHandler? NotificationDismissRequested;
 
@@ -95,6 +97,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _notificationSettings = notificationSettings;
         _notificationStateStore = notificationStateStore;
         _notificationState = _notificationStateStore.Read();
+        // Tracked sessions and drafts alone do not count as a submitted timesheet.
+        WorkDateAlert = new MissingTimesheetAlertViewModel(async date =>
+            (await _api.GetStatusAsync(_device!.Id, date)).AdditionalSeconds > 0,
+            _notificationState.DismissedMissingTimesheetWorkDate);
+        DismissWorkDateAlertCommand = new RelayCommand(_ =>
+        {
+            WorkDateAlert.Dismiss();
+            _notificationState.DismissedMissingTimesheetWorkDate = WorkDateAlert.DismissedWorkDate;
+            _notificationStateStore.Write(_notificationState);
+        });
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule());
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
@@ -117,6 +129,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try
         {
             _device = await _api.EnsureDeviceAsync(Environment.MachineName);
+            await RefreshWorkDateAlertAsync();
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
@@ -124,6 +137,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
             foreach (var project in await projectsTask) Projects.Add(project);
             foreach (var client in await clientsTask) Clients.Add(client);
+            TaskCategories.Clear();
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             _ = PollAsync(_stop.Token);
@@ -136,6 +150,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void OpenFromNotification(DateOnly? workDate = null)
     {
         if (_device is null) return;
+        _ = RefreshWorkDateAlertAsync();
         var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.Today);
         if (SelectedDate == targetDate)
             _ = RefreshSelectedDateStatusAsync(targetDate);
@@ -203,6 +218,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             while (true)
             {
                 await Task.Delay(GetNextNotificationCheckDelay(DateTime.Now), token);
+                await RefreshWorkDateAlertAsync();
                 try { await ProcessDueNotificationsAsync(DateTime.Now); }
                 catch (HttpRequestException ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
                 catch (TaskCanceledException) when (!token.IsCancellationRequested) { SetStatus("Notification check timed out. Retrying automatically.", true); }
@@ -245,12 +261,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         BeginDataLoad();
         try
         {
+            await RefreshWorkDateAlertAsync();
             SelectedDate ??= DateOnly.FromDateTime(DateTime.Today);
+            var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
+            var categoriesTask = _api.GetTaskCategoriesAsync();
+            await Task.WhenAll(projectsTask, clientsTask, categoriesTask);
+            var projects = await projectsTask;
+            Projects.Clear();
+            foreach (var project in projects) Projects.Add(project);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             var clients = await clientsTask;
             Clients.Clear();
             foreach (var client in clients) Clients.Add(client);
+            TaskCategories.Clear();
+            foreach (var category in await categoriesTask) TaskCategories.Add(category);
             SetStatus(ManualSessions.Count == 0
                 ? "No sessions for the selected date."
                 : $"Loaded {ManualSessions.Count} session(s).");
@@ -356,10 +381,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             foreach (var item in ManualSessions)
             {
                 if (string.IsNullOrWhiteSpace(item.ProjectName)) throw new InvalidOperationException("Project is required for every added session.");
+                if (!Projects.Any(project => string.Equals(project.Name, item.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Select an existing project for every added session.");
                 if (item.EngagedTime <= TimeSpan.Zero || item.EngagedTime > TimeSpan.FromHours(24))
                     throw new InvalidOperationException("Hours must be greater than zero and no more than 24.");
                 if (string.IsNullOrWhiteSpace(item.TaskCategory)) throw new InvalidOperationException("Task category is required for every added session.");
                 if (string.IsNullOrWhiteSpace(item.ClientName)) throw new InvalidOperationException("Client is required for every added session.");
+                if (!Clients.Any(client => string.Equals(client.Name, item.ClientName.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Select an existing client for every added session.");
             }
             if (!_confirmation.ConfirmDailySubmission(
                     workDate, ManualSessions.Count, TotalDuration))
@@ -395,6 +424,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 }).ToList()
             };
             var result = await _api.SubmitAsync(request);
+            if (request.ManualSessions.Count > 0) WorkDateAlert.RecordSubmission(workDate);
             NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
             SetStatus($"Sessions saved: {result.CreatedManualSessions} added, {result.UpdatedManualSessions} updated, {result.DeletedManualSessions} removed.");
             _existingDateOverrides.Remove(workDate);
@@ -404,6 +434,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex) { SetStatus(ex.Message, true); }
         finally { IsBusy = false; }
+    }
+
+    private async Task RefreshWorkDateAlertAsync()
+    {
+        if (_device is null) return;
+        try { await WorkDateAlert.RefreshAsync(); }
+        catch (Exception ex) { SetStatus($"Could not check yesterday's timesheet: {ex.Message}", true); }
     }
 
     private void RaiseSummary()

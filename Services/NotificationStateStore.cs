@@ -45,6 +45,7 @@ public sealed class NotificationStateStore
 
 public sealed class NotificationProcessingState
 {
+    public DateOnly? DismissedMissingTimesheetWorkDate { get; set; }
     public DateOnly? MorningProcessedDate { get; set; }
     public DateOnly? AfternoonProcessedDate { get; set; }
 }

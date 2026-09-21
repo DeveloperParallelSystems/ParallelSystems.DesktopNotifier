@@ -1,14 +1,36 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
+using ParallelSystems.DesktopNotifier.Models;
 using ParallelSystems.DesktopNotifier.ViewModels;
+using ComboBox = System.Windows.Controls.ComboBox;
 
 namespace ParallelSystems.DesktopNotifier.Views;
 
 public partial class MainWindow : Window
 {
     public MainWindow() => InitializeComponent();
+
+    private void ExistingNameComboBoxLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not ComboBox comboBox || comboBox.IsKeyboardFocusWithin) return;
+
+        var enteredName = comboBox.Text.Trim();
+        var match = comboBox.Items.Cast<object>().FirstOrDefault(item =>
+            string.Equals(GetName(item), enteredName, StringComparison.OrdinalIgnoreCase));
+
+        comboBox.SetCurrentValue(ComboBox.TextProperty, match is null ? "" : GetName(match));
+        comboBox.GetBindingExpression(ComboBox.TextProperty)?.UpdateSource();
+    }
+
+    private static string GetName(object item) => item switch
+    {
+        ProjectModel project => project.Name,
+        ClientModel client => client.Name,
+        _ => ""
+    };
 
     private async void WorkDatePickerCalendarOpened(object sender, RoutedEventArgs e)
     {
