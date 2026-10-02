@@ -5,7 +5,8 @@ namespace ParallelSystems.DesktopNotifier.Services;
 
 public sealed class NotificationStateStore
 {
-    private readonly string _path = Path.Combine(
+    private readonly string _path;
+    public NotificationStateStore(string? path = null) => _path = path ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Parallel Systems", "Timesheet Notifier", "notification-state.json");
 
@@ -25,15 +26,23 @@ public sealed class NotificationStateStore
 
     public void Write(NotificationProcessingState state)
     {
-        var temporaryPath = _path + ".tmp";
+        try { WriteRequired(state); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+    public void WriteRequired(NotificationProcessingState state)
+    {
+        var temporaryPath = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, AppSettings.JsonOptions));
+            using (var file = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                var bytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(state, AppSettings.JsonOptions));
+                file.Write(bytes); file.Flush(true);
+            }
             File.Move(temporaryPath, _path, true);
         }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
         finally
         {
             try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }

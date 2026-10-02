@@ -12,6 +12,11 @@ namespace ParallelSystems.DesktopNotifier.Views;
 public partial class MainWindow : Window
 {
     public MainWindow() => InitializeComponent();
+    private void OpenUpdater_Click(object sender, RoutedEventArgs e)
+    {
+        try { ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater(); }
+        catch { System.Windows.MessageBox.Show("Install or repair the per-user Parallel Systems Updater and try again.", "Updates"); }
+    }
 
     private void ExistingNameComboBoxLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {

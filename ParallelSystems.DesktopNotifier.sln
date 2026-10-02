@@ -1,8 +1,13 @@
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystems.DesktopNotifier", "ParallelSystems.DesktopNotifier.csproj", "{F7A0915B-DC99-4D40-889F-E0C93905CB3C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ParallelSystems.DesktopNotifier.Tests", "..\ParallelSystems.Test\ParallelSystems.DesktopNotifier\ParallelSystems.DesktopNotifier.Tests.csproj", "{74905B68-BD7D-49EB-AC36-F84585447B73}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,8 +19,15 @@ Global
 		{F7A0915B-DC99-4D40-889F-E0C93905CB3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F7A0915B-DC99-4D40-889F-E0C93905CB3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F7A0915B-DC99-4D40-889F-E0C93905CB3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74905B68-BD7D-49EB-AC36-F84585447B73}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74905B68-BD7D-49EB-AC36-F84585447B73}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74905B68-BD7D-49EB-AC36-F84585447B73}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74905B68-BD7D-49EB-AC36-F84585447B73}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{74905B68-BD7D-49EB-AC36-F84585447B73} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

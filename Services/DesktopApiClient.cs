@@ -5,14 +5,17 @@ using System.Text.Json;
 
 namespace ParallelSystems.DesktopNotifier.Services;
 
-public sealed class DesktopApiClient
+public sealed class DesktopApiClient : IDisposable
 {
     private readonly HttpClient _client;
-    public DesktopApiClient(AppSettings settings)
+    public DesktopApiClient(AppSettings settings, HttpMessageHandler? handler = null)
     {
-        _client = new HttpClient { BaseAddress = new Uri(settings.ApiBaseUrl + "/"), Timeout = TimeSpan.FromSeconds(30) };
+        _client = (handler is null ? new HttpClient() : new HttpClient(handler));
+        _client.BaseAddress = new Uri(settings.ApiBaseUrl + "/");
+        _client.Timeout = TimeSpan.FromSeconds(30);
         _client.DefaultRequestHeaders.Add("X-Tracker-Key", settings.ApiKey);
     }
+    public void Dispose() => _client.Dispose();
     public Task<DeviceModel> EnsureDeviceAsync(string machine)
     {
         var osVersion = Environment.OSVersion.VersionString;

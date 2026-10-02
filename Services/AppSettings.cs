@@ -28,7 +28,9 @@ public sealed class AppSettings
             "Parallel Systems",
             "Timesheet",
             "notifier.settings.json");
-        var path = File.Exists(legacyPath) ? legacyPath : applicationPath;
+        var userPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Parallel Systems", "Desktop Notifier", "notifier.settings.json");
+        var path = File.Exists(userPath) ? userPath : File.Exists(legacyPath) ? legacyPath : applicationPath;
         var value = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) : new AppSettings();
         value ??= new AppSettings();
         var userSchedule = ReadUserNotificationSchedule();

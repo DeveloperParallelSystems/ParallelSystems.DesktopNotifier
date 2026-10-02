@@ -88,7 +88,8 @@
         <Grid Grid.Row="1" Margin="26">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <DockPanel Grid.Row="0" Margin="0,0,0,18">
-                <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
+                <Button DockPanel.Dock="Right" Content="Updates" Click="OpenUpdater_Click" Margin="8,0"/>
+                    <Button DockPanel.Dock="Right" Command="{Binding RefreshCommand}"
                         Width="38" Height="34" Padding="0" ToolTip="Refresh timesheet">
                     <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
                 </Button>

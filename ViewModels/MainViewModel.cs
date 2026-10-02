@@ -28,6 +28,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _status = "Starting...";
     private bool _hasError;
     private bool _busy;
+    private readonly UpdateShutdownGate _updateShutdown = new();
+    private Task _pollTask = Task.CompletedTask;
+    private string _savedSessions = "[]";
+    private string SessionSnapshot() => System.Text.Json.JsonSerializer.Serialize(ManualSessions);
+    public bool HasPendingEdits => _deletedManualSessionIds.Count > 0 || SessionSnapshot() != _savedSessions;
+    public bool IsUpdateShutdownPending => _updateShutdown.IsQuiescing;
     private readonly HashSet<DateOnly> _existingDateOverrides = [];
     private readonly HashSet<DateOnly> _existingWorkDates = [];
     private readonly HashSet<Guid> _deletedManualSessionIds = [];
@@ -53,9 +59,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _selectedDate;
         set
         {
-            if (Set(ref _selectedDate, value))
+            if (!_updateShutdown.IsQuiescing && Set(ref _selectedDate, value))
             {
                 ManualSessions.Clear();
+                _savedSessions = SessionSnapshot();
                 _deletedManualSessionIds.Clear();
                 AddManualCommand.RaiseCanExecuteChanged();
                 SubmitCommand.RaiseCanExecuteChanged();
@@ -78,7 +85,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool HasError { get => _hasError; private set => Set(ref _hasError, value); }
     public bool IsLoadingData => _dataLoadCount > 0;
     public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) { OnPropertyChanged(nameof(IsEditingEnabled)); SubmitCommand.RaiseCanExecuteChanged(); AddManualCommand.RaiseCanExecuteChanged(); } } }
-    public bool IsEditingEnabled => !IsBusy;
+    public bool IsEditingEnabled => !IsBusy && !_updateShutdown.IsQuiescing;
     public double RequiredHours => _settings.RequiredHoursPerDay;
     public double ManualHours => ManualSessions.Sum(x => Math.Max(0, x.EngagedTime.TotalHours));
     public double RemainingHours => Math.Max(0, RequiredHours - ManualHours);
@@ -103,19 +110,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _notificationState.DismissedMissingTimesheetWorkDate);
         DismissWorkDateAlertCommand = new RelayCommand(_ =>
         {
+            if (_updateShutdown.IsQuiescing) return;
             WorkDateAlert.Dismiss();
             _notificationState.DismissedMissingTimesheetWorkDate = WorkDateAlert.DismissedWorkDate;
             _notificationStateStore.Write(_notificationState);
         });
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !_updateShutdown.IsQuiescing);
         NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule());
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
-            !IsBusy && SelectedDate.HasValue &&
+            !IsBusy && !_updateShutdown.IsQuiescing && SelectedDate.HasValue &&
             (ManualSessions.Count > 0 || _deletedManualSessionIds.Count > 0));
-        AddManualCommand = new RelayCommand(_ => AddManual(), _ => SelectedDate.HasValue && !IsBusy);
+        AddManualCommand = new RelayCommand(_ => AddManual(), _ => SelectedDate.HasValue && !IsBusy && !_updateShutdown.IsQuiescing);
         RemoveManualCommand = new RelayCommand(value =>
         {
-            if (value is not ManualSessionModel row) return;
+            if (_updateShutdown.IsQuiescing || value is not ManualSessionModel row) return;
             if (row.Id.HasValue) _deletedManualSessionIds.Add(row.Id.Value);
             ManualSessions.Remove(row);
             RaiseSummary();
@@ -125,6 +133,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task InitializeAsync()
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         BeginDataLoad();
         try
         {
@@ -140,7 +150,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             TaskCategories.Clear();
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
             await RefreshSelectedDateStatusAsync(SelectedDate);
-            _ = PollAsync(_stop.Token);
+            _pollTask = PollAsync(_stop.Token);
             if (!HasError)
                 SetStatus($"Monitoring {Environment.MachineName}. Morning: {_settings.MorningNotificationAt:HH:mm}; evening: {_settings.AfternoonNotificationAt:HH:mm}.");
         }
@@ -149,6 +159,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void OpenFromNotification(DateOnly? workDate = null)
     {
+        if (_updateShutdown.IsQuiescing) return;
         if (_device is null) return;
         _ = RefreshWorkDateAlertAsync();
         var targetDate = workDate ?? DateOnly.FromDateTime(DateTime.Today);
@@ -160,6 +171,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task ProcessDueNotificationsAsync(DateTime now)
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         if (_device is null) return;
         var processingDate = DateOnly.FromDateTime(now);
         var currentTime = TimeOnly.FromDateTime(now);
@@ -184,6 +197,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private async Task ProcessMorningNotificationAsync(
         DateOnly processingDate, DateOnly workDate, string title, string message)
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         var result = await _api.GetStatusAsync(_device!.Id, workDate);
         _notificationState.MorningProcessedDate = processingDate;
         _notificationStateStore.Write(_notificationState);
@@ -218,6 +233,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             while (true)
             {
                 await Task.Delay(GetNextNotificationCheckDelay(DateTime.Now), token);
+                using var activity = _updateShutdown.TryEnter();
+                if (activity is null) continue;
                 await RefreshWorkDateAlertAsync();
                 try { await ProcessDueNotificationsAsync(DateTime.Now); }
                 catch (HttpRequestException ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
@@ -256,6 +273,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task RefreshAsync()
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         if (_device is null) return;
         IsBusy = true;
         BeginDataLoad();
@@ -286,7 +305,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void AddManual()
     {
-        if (!SelectedDate.HasValue) return;
+        if (_updateShutdown.IsQuiescing || !SelectedDate.HasValue) return;
         var duration = TimeSpan.FromHours(Math.Clamp(Math.Max(1, RemainingHours), 0.25, 23.75));
         var row = new ManualSessionModel { EngagedTime = duration };
         row.PropertyChanged += (_, _) => RaiseSummary();
@@ -295,6 +314,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task RefreshSelectedDateStatusAsync(DateOnly? date)
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         var request = ++_dateStatusRequest;
         SelectedDateHasSessions = false;
         if (!date.HasValue || _device is null)
@@ -334,6 +355,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 row.PropertyChanged += (_, _) => RaiseSummary();
                 ManualSessions.Add(row);
             }
+            _savedSessions = SessionSnapshot();
             SelectedDateHasSessions = existingManualSessions.Count > 0;
             SelectedDateStatus = existingManualSessions.Count > 0
                 ? $"{existingManualSessions.Count} session(s) already saved for this date."
@@ -352,6 +374,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public async Task LoadCalendarIndicatorsAsync(DateTime displayDate)
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         if (_device is null) return;
         var monthStart = new DateOnly(displayDate.Year, displayDate.Month, 1);
         var start = monthStart.AddDays(-7);
@@ -369,6 +393,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task SubmitAsync()
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         if (_device is null || !SelectedDate.HasValue) return;
         var workDate = SelectedDate.Value;
         IsBusy = true;
@@ -430,6 +456,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _existingDateOverrides.Remove(workDate);
             _deletedManualSessionIds.Clear();
             ManualSessions.Clear();
+            _savedSessions = SessionSnapshot();
             await RefreshAsync();
         }
         catch (Exception ex) { SetStatus(ex.Message, true); }
@@ -438,6 +465,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private async Task RefreshWorkDateAlertAsync()
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         if (_device is null) return;
         try { await WorkDateAlert.RefreshAsync(); }
         catch (Exception ex) { SetStatus($"Could not check yesterday's timesheet: {ex.Message}", true); }
@@ -460,6 +489,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private void EditNotificationSchedule()
     {
+        using var activity = _updateShutdown.TryEnter();
+        if (activity is null) return;
         var schedule = _notificationSettings.Edit(
             _settings.MorningNotificationAt, _settings.AfternoonNotificationAt);
         if (schedule is null) return;
@@ -491,5 +522,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null) { if (EqualityComparer<T>.Default.Equals(field, value)) return false; field = value; OnPropertyChanged(name); return true; }
     private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-    public void Dispose() { _stop.Cancel(); _stop.Dispose(); }
+    public string PrepareForUpdate()
+    {
+        var response = _updateShutdown.Prepare(IsBusy || IsLoadingData || HasPendingEdits,
+            () => _notificationStateStore.WriteRequired(_notificationState));
+        RefreshShutdownCommands();
+        return response;
+    }
+    public void AbortUpdateShutdown() { _updateShutdown.Abort(); RefreshShutdownCommands(); }
+    public async Task CompleteUpdateShutdownAsync()
+    {
+        _updateShutdown.Commit();
+        _stop.Cancel();
+        await _pollTask; // Ready was only returned with no active HTTP/work leases.
+    }
+    private void RefreshShutdownCommands()
+    {
+        OnPropertyChanged(nameof(IsEditingEnabled));
+        RefreshCommand.RaiseCanExecuteChanged(); SubmitCommand.RaiseCanExecuteChanged();
+        AddManualCommand.RaiseCanExecuteChanged(); RemoveManualCommand.RaiseCanExecuteChanged();
+    }
+    public void Dispose() { _stop.Cancel(); _stop.Dispose(); _api.Dispose(); }
 }
