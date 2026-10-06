@@ -8,7 +8,6 @@ namespace ParallelSystems.DesktopNotifier.Services;
 public sealed class AppSettings
 {
         public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
-    public string ApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
     public int CheckIntervalMinutes { get; set; } = 1;
     public double RequiredHoursPerDay { get; set; } = 8;
     public string MorningNotificationTime { get; set; } = "08:00";
