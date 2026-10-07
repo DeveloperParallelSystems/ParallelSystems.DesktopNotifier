@@ -50,6 +50,7 @@ public partial class App : System.Windows.Application
             _viewModel.NotificationDismissRequested += (_, _) => _notifications.Dismiss();
             await _viewModel.InitializeAsync();
             ParallelSystems.ProductSupport.ProductLifecycle.Report("desktop-notifier", null, Environment.ProcessPath!, "ready");
+            ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
             _updateServer = new UpdateShutdownServer("ParallelSystems.DesktopNotifier",
                 token => Dispatcher.InvokeAsync(() => _viewModel.PrepareForUpdate(), System.Windows.Threading.DispatcherPriority.Normal, token).Task,
                 async () => await await Dispatcher.InvokeAsync(async () => {
