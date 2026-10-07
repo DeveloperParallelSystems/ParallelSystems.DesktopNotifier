@@ -91,7 +91,7 @@
                 <Button DockPanel.Dock="Right" x:Name="ProductUpdatesButton" Content="Updates ▼" Click="ShowUpdatesMenu_Click" Margin="8,0">
                     <Button.ContextMenu>
                         <ContextMenu Opened="UpdatesMenu_Opened">
-                            <MenuItem Header="Check for Updates" Click="OpenUpdater_Click"/>
+                            <MenuItem Header="Check for Updates" Click="CheckForUpdates_Click"/>
                             <Separator x:Name="UpdateActionSeparator" Visibility="Collapsed"/>
                             <MenuItem x:Name="UpdateActionMenuItem" Visibility="Collapsed" Click="OpenUpdater_Click"/>
                         </ContextMenu>

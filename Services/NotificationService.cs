@@ -25,7 +25,7 @@ public sealed class NotificationService : IDisposable
         var updates=new ToolStripMenuItem("Updates");
         menu.Items.Add(updates);
         EventHandler openUpdates=(_,_)=>{try{ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater();}catch{System.Windows.MessageBox.Show("Install or repair Parallel Systems Updater.","Updates");}};
-        updates.DropDownItems.Add("Check for Updates",null,openUpdates);
+        updates.DropDownItems.Add("Check for Updates",null,(_,_)=>{try{ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates();}catch{System.Windows.MessageBox.Show("Install or repair Parallel Systems Updater.","Updates");}});
         var updateSeparator=new ToolStripSeparator{Visible=false};
         updates.DropDownItems.Add(updateSeparator);
         var updateAction=updates.DropDownItems.Add("",null,openUpdates);

@@ -35,6 +35,11 @@ public partial class MainWindow : Window
         ProductUpdatesButton.ContextMenu.Placement=PlacementMode.Bottom;
         ProductUpdatesButton.ContextMenu.IsOpen=true;
     }
+    private void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        try { ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates(); }
+        catch { System.Windows.MessageBox.Show("Install or repair the per-user Parallel Systems Updater and try again.", "Updates"); }
+    }
     private void OpenUpdater_Click(object sender, RoutedEventArgs e)
     {
         try { ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater(); }
