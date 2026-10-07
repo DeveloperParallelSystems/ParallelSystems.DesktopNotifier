@@ -9,6 +9,8 @@ public partial class App : System.Windows.Application
 {
     private const string SingleInstanceMutexName = @"Local\ParallelSystems.DesktopNotifier.SingleInstance";
     private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _showMain;
+    private RegisteredWaitHandle? _showMainRegistration;
     private MainViewModel? _viewModel;
     private MainWindow? _window;
     private NotificationService? _notifications;
@@ -19,8 +21,10 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out var isFirstInstance);
+        _showMain = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\ParallelSystems.DesktopNotifier.ShowMain");
         if (!isFirstInstance)
         {
+            if (e.Args.Contains("--show-main")) _showMain.Set();
             _singleInstanceMutex.Dispose();
             _singleInstanceMutex = null;
             Shutdown();
@@ -51,6 +55,9 @@ public partial class App : System.Windows.Application
             await _viewModel.InitializeAsync();
             ParallelSystems.ProductSupport.ProductLifecycle.Report("desktop-notifier", null, Environment.ProcessPath!, "ready");
             ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
+            _showMainRegistration = ThreadPool.RegisterWaitForSingleObject(_showMain,
+                (_, _) => Dispatcher.BeginInvoke(ShowMainWindow), null, Timeout.Infinite, false);
+            if (e.Args.Contains("--show-main")) ShowMainWindow();
             _updateServer = new UpdateShutdownServer("ParallelSystems.DesktopNotifier",
                 token => Dispatcher.InvokeAsync(() => _viewModel.PrepareForUpdate(), System.Windows.Threading.DispatcherPriority.Normal, token).Task,
                 async () => await await Dispatcher.InvokeAsync(async () => {
@@ -68,8 +75,18 @@ public partial class App : System.Windows.Application
         }
     }
 
+    private void ShowMainWindow()
+    {
+        if (_window is null || _viewModel is null || _viewModel.IsUpdateShutdownPending) return;
+        _window.Show();
+        _window.WindowState = WindowState.Normal;
+        _window.Activate();
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        _showMainRegistration?.Unregister(null);
+        _showMain?.Dispose();
         _updateServer?.Stop();
         _viewModel?.Dispose();
         _notifications?.Dispose();
