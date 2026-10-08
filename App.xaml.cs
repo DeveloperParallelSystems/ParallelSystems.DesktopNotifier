@@ -38,7 +38,7 @@ public partial class App : System.Windows.Application
             var api = new DesktopApiClient(settings);
             _notifications = new NotificationService();
             _viewModel = new MainViewModel(api, settings, new ConfirmationService(),
-                new NotificationSettingsService(), new NotificationStateStore());
+                new NotificationSettingsService(api), new NotificationStateStore());
             _window = new MainWindow { DataContext = _viewModel };
             _window.Closing += (_, args) => { if (!_exitingForUpdate) { args.Cancel = true; _window.Hide(); } };
             _notifications.OpenRequested += (_, request) =>

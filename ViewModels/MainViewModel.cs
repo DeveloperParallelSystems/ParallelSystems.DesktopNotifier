@@ -41,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<ProjectModel> Projects { get; } = [];
     public ObservableCollection<ClientModel> Clients { get; } = [];
     public ObservableCollection<string> TaskCategories { get; } = [];
+    public ObservableCollection<string> PackageNames { get; } = [];
     public ObservableCollection<ManualSessionModel> ManualSessions { get; } = [];
     public IReadOnlyList<TimeSpan> TimeOptions { get; } =
         Enumerable.Range(0, 96).Select(index => TimeSpan.FromMinutes(index * 15)).ToList();
@@ -143,12 +144,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
+            var packageNamesTask = _api.GetPackageNamesAsync();
             try { await ProcessDueNotificationsAsync(DateTime.Now); }
             catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
             foreach (var project in await projectsTask) Projects.Add(project);
             foreach (var client in await clientsTask) Clients.Add(client);
             TaskCategories.Clear();
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
+            PackageNames.Clear();
+            foreach (var name in await packageNamesTask) PackageNames.Add(name);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             _pollTask = PollAsync(_stop.Token);
             if (!HasError)
@@ -285,7 +289,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var projectsTask = _api.GetProjectsAsync();
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
-            await Task.WhenAll(projectsTask, clientsTask, categoriesTask);
+            var packageNamesTask = _api.GetPackageNamesAsync();
+            await Task.WhenAll(projectsTask, clientsTask, categoriesTask, packageNamesTask);
             var projects = await projectsTask;
             Projects.Clear();
             foreach (var project in projects) Projects.Add(project);
@@ -295,6 +300,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             foreach (var client in clients) Clients.Add(client);
             TaskCategories.Clear();
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
+            PackageNames.Clear();
+            foreach (var name in await packageNamesTask) PackageNames.Add(name);
             SetStatus(ManualSessions.Count == 0
                 ? "No sessions for the selected date."
                 : $"Loaded {ManualSessions.Count} session(s).");
@@ -350,6 +357,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     TaskCategory = existing.TaskCategory,
                     ClientName = existing.ClientName,
                     Level = existing.Level,
+                    PackageName = existing.PackageName,
                     Notes = existing.Notes
                 };
                 row.PropertyChanged += (_, _) => RaiseSummary();
@@ -406,6 +414,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
             foreach (var item in ManualSessions)
             {
+                if (item.PackageName?.Trim().Length > 300) throw new InvalidOperationException("Package name cannot exceed 300 characters.");
                 if (string.IsNullOrWhiteSpace(item.ProjectName)) throw new InvalidOperationException("Project is required for every added session.");
                 if (!Projects.Any(project => string.Equals(project.Name, item.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidOperationException("Select an existing project for every added session.");
@@ -443,6 +452,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                             string.Equals(client.Name, x.ClientName.Trim(), StringComparison.OrdinalIgnoreCase))?.Id,
                         ClientName = x.ClientName.Trim(),
                         Level = string.IsNullOrWhiteSpace(x.Level) ? null : x.Level.Trim(),
+                        PackageName = string.IsNullOrWhiteSpace(x.PackageName) ? null : x.PackageName.Trim(),
                         StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
                         EndedAtUtc = new DateTimeOffset(end.ToUniversalTime(), TimeSpan.Zero),
                         TaskCategory = x.TaskCategory.Trim(), Notes = x.Notes

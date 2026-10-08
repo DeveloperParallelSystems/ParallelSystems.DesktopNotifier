@@ -17,6 +17,15 @@ public sealed class DesktopApiClient : IDisposable
         _client.DefaultRequestHeaders.Add("X-Parallel-Version", typeof(DesktopApiClient).Assembly.GetName().Version!.ToString());
     }
     public void Dispose() => _client.Dispose();
+    public Task<EmployeePersonalInformation> GetPersonalInformationAsync(Guid deviceId) =>
+        SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/desktop/daily-work/personal-information?deviceId={deviceId}");
+
+    public async Task<EmployeePersonalInformation> SavePersonalInformationAsync(Guid deviceId, EmployeePersonalInformation information)
+    {
+        using var response = await _client.PutAsJsonAsync(
+            $"api/desktop/daily-work/personal-information?deviceId={deviceId}", information, AppSettings.JsonOptions);
+        return await ReadAsync<EmployeePersonalInformation>(response);
+    }
     public Task<DeviceModel> EnsureDeviceAsync(string machine)
     {
         var osVersion = Environment.OSVersion.VersionString;
@@ -33,6 +42,7 @@ public sealed class DesktopApiClient : IDisposable
     public Task<List<ProjectModel>> GetProjectsAsync() => SendAsync<List<ProjectModel>>(HttpMethod.Get, "api/desktop/daily-work/projects");
     public Task<List<ClientModel>> GetClientsAsync() => SendAsync<List<ClientModel>>(HttpMethod.Get, "api/desktop/daily-work/clients");
     public Task<List<string>> GetTaskCategoriesAsync() => SendAsync<List<string>>(HttpMethod.Get, "api/desktop/daily-work/task-categories");
+    public Task<List<string>> GetPackageNamesAsync() => SendAsync<List<string>>(HttpMethod.Get, "api/desktop/daily-work/package-names");
     public async Task<SubmitResponse> SubmitAsync(DailySubmitRequest request)
     {
         using var response = await _client.PostAsJsonAsync("api/desktop/daily-work/submit", request, AppSettings.JsonOptions);

@@ -1,9 +1,9 @@
 <Window x:Class="ParallelSystems.DesktopNotifier.Views.NotificationSettingsDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Notification schedule"
+        Title="Settings"
         Icon="/Assets/logo-mark.ico"
-        Width="450" SizeToContent="Height"
+        Width="580" SizeToContent="Height" MaxHeight="740"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
@@ -24,20 +24,22 @@
             </Border>
             <Grid Grid.Row="1" Margin="26,24">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
                 <DockPanel Grid.Row="0" Margin="0,0,0,20">
                     <Button DockPanel.Dock="Right" Content="✕" Padding="8,4" Margin="8,0,0,0"
                             FontSize="14" Click="CancelClicked" ToolTip="Close"/>
                     <StackPanel>
-                        <TextBlock Text="NOTIFICATIONS" Style="{StaticResource EyebrowText}"/>
-                        <TextBlock Text="Reminder schedule" FontSize="21" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                        <TextBlock Text="PREFERENCES" Style="{StaticResource EyebrowText}"/>
+                        <TextBlock Text="Settings" FontSize="21" FontWeight="SemiBold" Margin="0,4,0,0"/>
                     </StackPanel>
                 </DockPanel>
 
-                <Grid Grid.Row="1" Margin="0,0,0,10">
+                <TabControl Grid.Row="1" Background="{StaticResource SurfaceBrush}">
+                <TabItem Header="Notifications">
+                <StackPanel Margin="12,20,12,8">
+                <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,8,0">
                         <TextBlock Text="MORNING" Style="{StaticResource EyebrowText}" Margin="4,0,0,4"/>
@@ -49,14 +51,52 @@
                     </StackPanel>
                 </Grid>
 
-                <TextBlock Grid.Row="2" Text="Use 24-hour HH:mm format. Morning must be before 12:00; evening must be 12:00 or later."
+                <TextBlock Text="Use 24-hour HH:mm format. Morning must be before 12:00; evening must be 12:00 or later."
                            Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="4,0,0,18"/>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Cancel" MinWidth="90" IsCancel="True" Click="CancelClicked"/>
                     <Button Content="Save schedule" MinWidth="140" Style="{StaticResource PrimaryButton}"
                             IsDefault="True" Click="SaveClicked"/>
                 </StackPanel>
+                </StackPanel>
+                </TabItem>
+                <TabItem Header="Personal information">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="500">
+                        <StackPanel Margin="12,16,12,8">
+                            <TextBlock Text="Edit the employee record linked to this computer."
+                                       Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                            <TextBlock x:Name="ProfileStatusText" Text="Loading personal information…"
+                                       TextWrapping="Wrap" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
+                            <Button x:Name="ReloadProfileButton" Content="Reload personal information" HorizontalAlignment="Left"
+                                    Click="ReloadProfileClicked" Margin="0,0,0,10"/>
+                            <StackPanel x:Name="ProfileForm" IsEnabled="False">
+                                <TextBlock Text="First name"/>
+                                <TextBox x:Name="FirstNameTextBox" MaxLength="100" Margin="0,2,0,8"/>
+                                <TextBlock Text="Middle name"/>
+                                <TextBox x:Name="MiddleNameTextBox" MaxLength="100" Margin="0,2,0,8"/>
+                                <TextBlock Text="Last name"/>
+                                <TextBox x:Name="LastNameTextBox" MaxLength="100" Margin="0,2,0,8"/>
+                                <TextBlock Text="Suffix"/>
+                                <TextBox x:Name="SuffixTextBox" MaxLength="30" Margin="0,2,0,8"/>
+                                <TextBlock Text="Gender"/>
+                                <TextBox x:Name="GenderTextBox" MaxLength="30" Margin="0,2,0,8"/>
+                                <TextBlock Text="Birth date"/>
+                                <DatePicker x:Name="BirthDatePicker" Margin="0,2,0,8"/>
+                                <TextBlock Text="Civil status"/>
+                                <TextBox x:Name="CivilStatusTextBox" MaxLength="50" Margin="0,2,0,8"/>
+                                <TextBlock Text="Nationality"/>
+                                <TextBox x:Name="NationalityTextBox" MaxLength="100" Margin="0,2,0,8"/>
+                                <TextBlock Text="Address"/>
+                                <TextBox x:Name="AddressTextBox" MaxLength="1000" AcceptsReturn="True"
+                                         TextWrapping="Wrap" MinHeight="70" Margin="0,2,0,12"/>
+                                <Button Content="Save personal information" Style="{StaticResource PrimaryButton}"
+                                        HorizontalAlignment="Right" Click="SaveProfileClicked"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+                </TabControl>
             </Grid>
         </Grid>
     </Border>

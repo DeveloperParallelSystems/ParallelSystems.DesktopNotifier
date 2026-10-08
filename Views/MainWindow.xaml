@@ -102,7 +102,7 @@
                     <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
                 </Button>
                 <Button DockPanel.Dock="Right" Command="{Binding NotificationSettingsCommand}"
-                        Width="38" Height="34" Padding="0" ToolTip="Notification settings">
+                        Width="38" Height="34" Padding="0" ToolTip="Settings">
                     <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
                 </Button>
                 <StackPanel>
@@ -167,6 +167,9 @@
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Client *" Width="1.3*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Clients, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" TextSearch.TextPath="Name" IsTextSearchEnabled="True" IsTextSearchCaseSensitive="False" LostKeyboardFocus="ExistingNameComboBoxLostKeyboardFocus" Text="{Binding ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Type to find and select an existing client"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Package Name" Width="1.3*">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.PackageNames, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding PackageName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Select a package name or enter your own"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Level" Width="1*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
