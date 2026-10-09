@@ -11,7 +11,40 @@ namespace ParallelSystems.DesktopNotifier.Views;
 
 public partial class MainWindow : Window
 {
-    public MainWindow() => InitializeComponent();
+    private readonly System.Windows.Threading.DispatcherTimer _updateTimer=new(){Interval=TimeSpan.FromSeconds(2)};
+    public MainWindow()
+    {
+        InitializeComponent();
+        _updateTimer.Tick+=(_,_)=>RefreshUpdatesMenu();
+        Loaded+=(_,_)=>_updateTimer.Start(); Closed+=(_,_)=>_updateTimer.Stop();
+    }
+    private void RefreshUpdatesMenu()
+    {
+        var status=ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("desktop-notifier",null);
+        var action=ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("desktop-notifier",null);
+        ProductUpdatesButton.Content=status+" ▼";
+        UpdateActionMenuItem.Header=action;
+        UpdateActionMenuItem.ToolTip=status;
+        UpdateActionMenuItem.Visibility=UpdateActionSeparator.Visibility=string.IsNullOrEmpty(action)?Visibility.Collapsed:Visibility.Visible;
+    }
+    private void UpdatesMenu_Opened(object sender, RoutedEventArgs e) => RefreshUpdatesMenu();
+    private void ShowUpdatesMenu_Click(object sender, RoutedEventArgs e)
+    {
+        RefreshUpdatesMenu();
+        ProductUpdatesButton.ContextMenu.PlacementTarget=ProductUpdatesButton;
+        ProductUpdatesButton.ContextMenu.Placement=PlacementMode.Bottom;
+        ProductUpdatesButton.ContextMenu.IsOpen=true;
+    }
+    private void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        try { ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates(); }
+        catch { System.Windows.MessageBox.Show("Install or repair the per-user Parallel Systems Updater and try again.", "Updates"); }
+    }
+    private void OpenUpdater_Click(object sender, RoutedEventArgs e)
+    {
+        try { ParallelSystems.ProductSupport.ProductLifecycle.OpenUpdater(); }
+        catch { System.Windows.MessageBox.Show("Install or repair the per-user Parallel Systems Updater and try again.", "Updates"); }
+    }
 
     private void ExistingNameComboBoxLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
     {

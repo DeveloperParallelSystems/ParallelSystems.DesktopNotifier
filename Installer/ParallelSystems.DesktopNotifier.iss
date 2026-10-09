@@ -26,10 +26,11 @@ RestartApplications=no
 AppMutex=Local\ParallelSystems.DesktopNotifier
 
 [Files]
+Source: "..\Assets\logo-mark.ico"; DestDir: "{app}"; DestName: "Product.ico"; Flags: ignoreversion
 Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Parallel Systems Desktop Notifier"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\Parallel Systems Desktop Notifier"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\Product.ico"; IconIndex: 0
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Parallel Systems Desktop Notifier"; ValueData: """{app}\{#MyAppExeName}"""; Flags: uninsdeletevalue

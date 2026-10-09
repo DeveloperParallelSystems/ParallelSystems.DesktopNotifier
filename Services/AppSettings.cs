@@ -8,7 +8,6 @@ namespace ParallelSystems.DesktopNotifier.Services;
 public sealed class AppSettings
 {
         public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
-    public string ApiKey { get; set; } = "TzuOp6FOUBaRuRtHX8/krK3ztrxY/OmSIowsJMdnso/rcXvWtdaQEP5Ee86FQcjx";
     public int CheckIntervalMinutes { get; set; } = 1;
     public double RequiredHoursPerDay { get; set; } = 8;
     public string MorningNotificationTime { get; set; } = "08:00";
@@ -28,7 +27,9 @@ public sealed class AppSettings
             "Parallel Systems",
             "Timesheet",
             "notifier.settings.json");
-        var path = File.Exists(legacyPath) ? legacyPath : applicationPath;
+        var userPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Parallel Systems", "Desktop Notifier", "notifier.settings.json");
+        var path = File.Exists(userPath) ? userPath : File.Exists(legacyPath) ? legacyPath : applicationPath;
         var value = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) : new AppSettings();
         value ??= new AppSettings();
         var userSchedule = ReadUserNotificationSchedule();
