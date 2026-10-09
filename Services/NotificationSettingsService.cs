@@ -10,9 +10,13 @@ public interface INotificationSettingsService
 
 public sealed class NotificationSettingsService : INotificationSettingsService
 {
+    private readonly DesktopApiClient _api;
+
+    public NotificationSettingsService(DesktopApiClient api) => _api = api;
+
     public NotificationSchedule? Edit(TimeOnly morning, TimeOnly evening)
     {
-        var dialog = new NotificationSettingsDialog(morning, evening)
+        var dialog = new NotificationSettingsDialog(morning, evening, _api)
         {
             Owner = System.Windows.Application.Current.Windows
                 .OfType<Window>()

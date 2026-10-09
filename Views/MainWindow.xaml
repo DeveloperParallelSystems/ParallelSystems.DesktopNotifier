@@ -102,7 +102,7 @@
                     <TextBlock Text="&#xE72C;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
                 </Button>
                 <Button DockPanel.Dock="Right" Command="{Binding NotificationSettingsCommand}"
-                        Width="38" Height="34" Padding="0" ToolTip="Notification settings">
+                        Width="38" Height="34" Padding="0" ToolTip="Settings">
                     <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
                 </Button>
                 <StackPanel>
@@ -151,25 +151,28 @@
                         <Button DockPanel.Dock="Right" Content="+ Add session" Command="{Binding AddManualCommand}" Style="{StaticResource TableButton}"/>
                         <StackPanel>
                             <TextBlock Text="WORK SESSIONS" Style="{StaticResource EyebrowText}"/>
-                            <TextBlock Text="Choose a project, hours, category, client, and level for each entry." Style="{StaticResource MutedText}" Margin="0,4,0,0"/>
+                            <TextBlock Text="Choose a client, project, package name, task category, level, and hours for each entry." Style="{StaticResource MutedText}" Margin="0,4,0,0"/>
                         </StackPanel>
                     </DockPanel>
                     <DataGrid Grid.Row="1" ItemsSource="{Binding ManualSessions}" AutoGenerateColumns="False" CanUserAddRows="False">
                         <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="Client *" Width="1.3*">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Clients, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" TextSearch.TextPath="Name" IsTextSearchEnabled="True" IsTextSearchCaseSensitive="False" LostKeyboardFocus="ExistingNameComboBoxLostKeyboardFocus" Text="{Binding ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Type to find and select an existing client"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Project" Width="2*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Projects, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" TextSearch.TextPath="Name" IsTextSearchEnabled="True" IsTextSearchCaseSensitive="False" LostKeyboardFocus="ExistingNameComboBoxLostKeyboardFocus" Text="{Binding ProjectName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Hours" Width="125">
-                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="False" ItemsSource="{Binding DataContext.TimeOptions, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding EngagedTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemStringFormat="{}{0:hh\:mm}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            <DataGridTemplateColumn Header="Package Name" Width="1.3*">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.PackageNames, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding PackageName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Select a package name or enter your own"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Task category *" Width="1.3*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.TaskCategories, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding TaskCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Select a task for this entry"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTemplateColumn Header="Client *" Width="1.3*">
-                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Clients, RelativeSource={RelativeSource AncestorType=Window}}" DisplayMemberPath="Name" TextSearch.TextPath="Name" IsTextSearchEnabled="True" IsTextSearchCaseSensitive="False" LostKeyboardFocus="ExistingNameComboBoxLostKeyboardFocus" Text="{Binding ClientName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Type to find and select an existing client"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
-                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Level" Width="1*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Hours" Width="125">
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="False" ItemsSource="{Binding DataContext.TimeOptions, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding EngagedTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemStringFormat="{}{0:hh\:mm}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Notes" Width="1.2*">
                                 <DataGridTemplateColumn.CellTemplate>
