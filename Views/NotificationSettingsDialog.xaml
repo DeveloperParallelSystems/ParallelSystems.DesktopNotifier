@@ -64,7 +64,7 @@
                 <TabItem Header="Personal information">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="500">
                         <StackPanel Margin="12,16,12,8">
-                            <TextBlock Text="Edit the employee record linked to this computer."
+                            <TextBlock Text="Edit the employee record whose identity key matches this computer name."
                                        Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                             <TextBlock x:Name="ProfileStatusText" Text="Loading personal information…"
                                        TextWrapping="Wrap" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>

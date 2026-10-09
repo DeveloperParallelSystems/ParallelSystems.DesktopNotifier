@@ -17,13 +17,13 @@ public sealed class DesktopApiClient : IDisposable
         _client.DefaultRequestHeaders.Add("X-Parallel-Version", typeof(DesktopApiClient).Assembly.GetName().Version!.ToString());
     }
     public void Dispose() => _client.Dispose();
-    public Task<EmployeePersonalInformation> GetPersonalInformationAsync(Guid deviceId) =>
-        SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/desktop/daily-work/personal-information?deviceId={deviceId}");
+    public Task<EmployeePersonalInformation> GetPersonalInformationAsync(string machineName) =>
+        SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/desktop/daily-work/personal-information?machineName={Uri.EscapeDataString(machineName)}");
 
-    public async Task<EmployeePersonalInformation> SavePersonalInformationAsync(Guid deviceId, EmployeePersonalInformation information)
+    public async Task<EmployeePersonalInformation> SavePersonalInformationAsync(string machineName, EmployeePersonalInformation information)
     {
         using var response = await _client.PutAsJsonAsync(
-            $"api/desktop/daily-work/personal-information?deviceId={deviceId}", information, AppSettings.JsonOptions);
+            $"api/desktop/daily-work/personal-information?machineName={Uri.EscapeDataString(machineName)}", information, AppSettings.JsonOptions);
         return await ReadAsync<EmployeePersonalInformation>(response);
     }
     public Task<DeviceModel> EnsureDeviceAsync(string machine)

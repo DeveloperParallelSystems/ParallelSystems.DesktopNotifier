@@ -9,7 +9,7 @@ namespace ParallelSystems.DesktopNotifier.Views;
 public partial class NotificationSettingsDialog : Window
 {
     private readonly DesktopApiClient _api;
-    private Guid? _deviceId;
+    private string? _profileMachineName;
     private bool _savingProfile;
     private bool _invalidBirthDate;
     public TimeOnly MorningTime { get; private set; }
@@ -47,12 +47,12 @@ public partial class NotificationSettingsDialog : Window
         ProfileForm.IsEnabled = false;
         ReloadProfileButton.IsEnabled = false;
         ProfileStatusText.Text = "Loading personal information…";
-        _deviceId = null;
+        _profileMachineName = null;
         try
         {
-            var device = await _api.EnsureDeviceAsync(Environment.MachineName);
-            var profile = await _api.GetPersonalInformationAsync(device.Id);
-            _deviceId = device.Id;
+            var machineName = Environment.MachineName;
+            var profile = await _api.GetPersonalInformationAsync(machineName);
+            _profileMachineName = machineName;
             FirstNameTextBox.Text = profile.FirstName ?? "";
             MiddleNameTextBox.Text = profile.MiddleName ?? "";
             LastNameTextBox.Text = profile.LastName ?? "";
@@ -75,7 +75,7 @@ public partial class NotificationSettingsDialog : Window
 
     private async void SaveProfileClicked(object sender, RoutedEventArgs e)
     {
-        if (_deviceId is not Guid deviceId || _savingProfile) return;
+        if (_profileMachineName is not string machineName || _savingProfile) return;
         if (_invalidBirthDate && !string.IsNullOrWhiteSpace(BirthDatePicker.Text))
         {
             ProfileStatusText.Text = "Re-enter a valid birth date, or clear the field before saving.";
@@ -101,7 +101,7 @@ public partial class NotificationSettingsDialog : Window
         ProfileStatusText.Text = "Saving personal information…";
         try
         {
-            await _api.SavePersonalInformationAsync(deviceId, profile);
+            await _api.SavePersonalInformationAsync(machineName, profile);
             ProfileStatusText.Text = "Personal information saved.";
         }
         catch (Exception ex)
