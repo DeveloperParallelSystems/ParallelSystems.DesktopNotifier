@@ -1,0 +1,24 @@
+<UserControl x:Class="ParallelSystems.DesktopNotifier.Views.CatalogEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="12,16,12,8">
+        <TextBlock Text="Create or edit shared timesheet options." TextWrapping="Wrap" Margin="0,0,0,12"/>
+        <StackPanel x:Name="EditorForm">
+            <ComboBox x:Name="CatalogSelector" SelectedIndex="0" SelectionChanged="CatalogChanged" Margin="0,0,0,10">
+                <ComboBoxItem Content="Projects" Tag="projects"/>
+                <ComboBoxItem Content="Package Names" Tag="package-names"/>
+                <ComboBoxItem Content="Task Categories" Tag="tasks"/>
+                <ComboBoxItem Content="Levels" Tag="levels"/>
+            </ComboBox>
+            <ListBox x:Name="ItemsList" Height="200" DisplayMemberPath="Name" SelectionChanged="ItemChanged"/>
+            <TextBlock Text="Name" Margin="0,12,0,4"/>
+            <TextBox x:Name="NameInput" MaxLength="500"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <Button Content="New" Click="NewClicked"/>
+                <Button Content="Reload" Click="ReloadClicked"/>
+                <Button x:Name="SaveButton" Content="Create" Click="SaveClicked" Style="{StaticResource PrimaryButton}"/>
+            </StackPanel>
+        </StackPanel>
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" Margin="0,12,0,0" AutomationProperties.LiveSetting="Polite"/>
+    </StackPanel>
+</UserControl>

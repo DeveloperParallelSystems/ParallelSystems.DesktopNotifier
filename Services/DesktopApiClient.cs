@@ -17,6 +17,32 @@ public sealed class DesktopApiClient : IDisposable
         _client.DefaultRequestHeaders.Add("X-Parallel-Version", typeof(DesktopApiClient).Assembly.GetName().Version!.ToString());
     }
     public void Dispose() => _client.Dispose();
+    public Task<PortalAccount> GetAccountAsync() => SendAsync<PortalAccount>(HttpMethod.Get, "api/auth/me");
+
+    public async Task<PortalAccount> LoginAsync(string username, string password)
+    {
+        using var response = await _client.PostAsJsonAsync("api/auth/login", new { username, password, rememberMe = false });
+        return await ReadAsync<PortalAccount>(response);
+    }
+
+    public async Task LogoutAsync()
+    {
+        using var response = await _client.PostAsync("api/auth/logout", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public Task<List<CatalogItem>> GetCatalogAsync(string catalog) =>
+        SendAsync<List<CatalogItem>>(HttpMethod.Get, $"api/{catalog}");
+
+    public async Task<CatalogItem> SaveCatalogItemAsync(string catalog, Guid? id, string name)
+    {
+        using var response = id.HasValue
+            ? await _client.PutAsJsonAsync($"api/{catalog}/{id}", new { name })
+            : await _client.PostAsJsonAsync($"api/{catalog}", new { name });
+        return await ReadAsync<CatalogItem>(response);
+    }
+
+    public Task<List<string>> GetLevelsAsync() => SendAsync<List<string>>(HttpMethod.Get, "api/desktop/daily-work/levels");
     public Task<EmployeePersonalInformation> GetPersonalInformationAsync(string machineName) =>
         SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/desktop/daily-work/personal-information?machineName={Uri.EscapeDataString(machineName)}");
 

@@ -169,7 +169,7 @@
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.TaskCategories, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding TaskCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Select a task for this entry"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Level" Width="1*">
-                                <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBox Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.Levels, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Hours" Width="125">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="False" ItemsSource="{Binding DataContext.TimeOptions, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding EngagedTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ItemStringFormat="{}{0:hh\:mm}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>

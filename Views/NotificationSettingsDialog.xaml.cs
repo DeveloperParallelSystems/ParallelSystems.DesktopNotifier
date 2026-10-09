@@ -11,6 +11,7 @@ public partial class NotificationSettingsDialog : Window
     private readonly DesktopApiClient _api;
     private string? _profileMachineName;
     private bool _savingProfile;
+    private bool _accountBusy;
     private bool _invalidBirthDate;
     public TimeOnly MorningTime { get; private set; }
     public TimeOnly EveningTime { get; private set; }
@@ -28,8 +29,9 @@ public partial class NotificationSettingsDialog : Window
             ProfileStatusText.Text = "Enter a valid birth date that is not in the future, or clear the field.";
         };
         BirthDatePicker.SelectedDateChanged += (_, _) => _invalidBirthDate = false;
-        Loaded += async (_, _) => await LoadProfileAsync();
-        Closing += (_, args) => args.Cancel = _savingProfile;
+        ProjectCatalogEditor.AccessLost += (_, _) => HideProjectManagement();
+        Loaded += async (_, _) => await Task.WhenAll(LoadProfileAsync(), RefreshAccountAsync());
+        Closing += (_, args) => args.Cancel = _savingProfile || _accountBusy || ProjectCatalogEditor.IsBusy;
         MorningTime = morning;
         EveningTime = evening;
         MorningTimeTextBox.Text = morning.ToString("HH:mm", CultureInfo.InvariantCulture);
@@ -38,6 +40,62 @@ public partial class NotificationSettingsDialog : Window
         {
             if (args.ButtonState == MouseButtonState.Pressed) DragMove();
         };
+    }
+
+    private void HideProjectManagement()
+    {
+        if (ProjectManagementTab.IsSelected) SettingsTabs.SelectedIndex = 0;
+        ProjectManagementTab.Visibility = Visibility.Collapsed;
+        AccountStatusText.Text = "Sign in with a Project Manager or administrator account to manage project settings.";
+    }
+
+    private async Task ShowAccountAsync(PortalAccount account)
+    {
+        HideProjectManagement();
+        AccountStatusText.Text = account.CanManageCatalogs
+            ? $"Signed in as {account.Name}."
+            : $"Signed in as {account.Name}. Project management access is not assigned.";
+        if (account.CanManageCatalogs)
+        {
+            ProjectManagementTab.Visibility = Visibility.Visible;
+            await ProjectCatalogEditor.InitializeAsync(_api);
+        }
+    }
+
+    private async Task RefreshAccountAsync()
+    {
+        _accountBusy = true;
+        AccountForm.IsEnabled = false;
+        try { await ShowAccountAsync(await _api.GetAccountAsync()); }
+        catch { HideProjectManagement(); }
+        finally { _accountBusy = false; AccountForm.IsEnabled = true; }
+    }
+
+    private async void SignInClicked(object sender, RoutedEventArgs e)
+    {
+        if (_accountBusy || ProjectCatalogEditor.IsBusy) return;
+        _accountBusy = true;
+        AccountForm.IsEnabled = false;
+        HideProjectManagement();
+        AccountStatusText.Text = "Signing in…";
+        try
+        {
+            await ShowAccountAsync(await _api.LoginAsync(UsernameInput.Text.Trim(), PasswordInput.Password));
+            if (ProjectManagementTab.Visibility == Visibility.Visible) ProjectManagementTab.IsSelected = true;
+        }
+        catch (Exception ex) { AccountStatusText.Text = ex.Message; }
+        finally { PasswordInput.Clear(); _accountBusy = false; AccountForm.IsEnabled = true; }
+    }
+
+    private async void SignOutClicked(object sender, RoutedEventArgs e)
+    {
+        if (_accountBusy || ProjectCatalogEditor.IsBusy) return;
+        _accountBusy = true;
+        AccountForm.IsEnabled = false;
+        HideProjectManagement();
+        try { await _api.LogoutAsync(); AccountStatusText.Text = "Signed out."; }
+        catch (Exception ex) { AccountStatusText.Text = $"Unable to sign out. {ex.Message}"; }
+        finally { PasswordInput.Clear(); _accountBusy = false; AccountForm.IsEnabled = true; }
     }
 
     private async void ReloadProfileClicked(object sender, RoutedEventArgs e) => await LoadProfileAsync();
@@ -118,7 +176,7 @@ public partial class NotificationSettingsDialog : Window
 
     private void SaveClicked(object sender, RoutedEventArgs e)
     {
-        if (_savingProfile) return;
+        if (_savingProfile || _accountBusy || ProjectCatalogEditor.IsBusy) return;
         if (!TryParseTime(MorningTimeTextBox.Text, out var morning))
         {
             ShowValidationMessage("Enter a valid morning time in HH:mm format.", MorningTimeTextBox);
@@ -158,6 +216,6 @@ public partial class NotificationSettingsDialog : Window
 
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
-        if (!_savingProfile) DialogResult = false;
+        if (!_savingProfile && !_accountBusy && !ProjectCatalogEditor.IsBusy) DialogResult = false;
     }
 }
