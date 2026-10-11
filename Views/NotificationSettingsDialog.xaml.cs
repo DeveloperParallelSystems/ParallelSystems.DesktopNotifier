@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.ComponentModel.DataAnnotations;
 using System.Windows;
 using System.Windows.Input;
 using ParallelSystems.DesktopNotifier.Models;
@@ -11,7 +12,6 @@ public partial class NotificationSettingsDialog : Window
     private readonly DesktopApiClient _api;
     private string? _profileMachineName;
     private bool _savingProfile;
-    private bool _accountBusy;
     private bool _invalidBirthDate;
     public TimeOnly MorningTime { get; private set; }
     public TimeOnly EveningTime { get; private set; }
@@ -29,9 +29,9 @@ public partial class NotificationSettingsDialog : Window
             ProfileStatusText.Text = "Enter a valid birth date that is not in the future, or clear the field.";
         };
         BirthDatePicker.SelectedDateChanged += (_, _) => _invalidBirthDate = false;
-        ProjectCatalogEditor.AccessLost += (_, _) => HideProjectManagement();
-        Loaded += async (_, _) => await Task.WhenAll(LoadProfileAsync(), RefreshAccountAsync());
-        Closing += (_, args) => args.Cancel = _savingProfile || _accountBusy || ProjectCatalogEditor.IsBusy;
+        ProjectCatalogEditor.AccessLost += (_, _) => HidePrivilegedTabs();
+        Loaded += async (_, _) => await LoadProfileAsync();
+        Closing += (_, args) => args.Cancel = _savingProfile || ProjectCatalogEditor.IsBusy;
         MorningTime = morning;
         EveningTime = evening;
         MorningTimeTextBox.Text = morning.ToString("HH:mm", CultureInfo.InvariantCulture);
@@ -42,60 +42,22 @@ public partial class NotificationSettingsDialog : Window
         };
     }
 
-    private void HideProjectManagement()
+    private void HidePrivilegedTabs()
     {
         if (ProjectManagementTab.IsSelected) SettingsTabs.SelectedIndex = 0;
         ProjectManagementTab.Visibility = Visibility.Collapsed;
-        AccountStatusText.Text = "Sign in with a Project Manager or administrator account to manage project settings.";
     }
 
-    private async Task ShowAccountAsync(PortalAccount account)
+    private async Task ShowEmployeeAccessAsync(EmployeePersonalInformation employee)
     {
-        HideProjectManagement();
-        AccountStatusText.Text = account.CanManageCatalogs
-            ? $"Signed in as {account.Name}."
-            : $"Signed in as {account.Name}. Project management access is not assigned.";
-        if (account.CanManageCatalogs)
+        if (!employee.CanManageCatalogs)
         {
-            ProjectManagementTab.Visibility = Visibility.Visible;
-            await ProjectCatalogEditor.InitializeAsync(_api);
+            HidePrivilegedTabs();
+            return;
         }
-    }
 
-    private async Task RefreshAccountAsync()
-    {
-        _accountBusy = true;
-        AccountForm.IsEnabled = false;
-        try { await ShowAccountAsync(await _api.GetAccountAsync()); }
-        catch { HideProjectManagement(); }
-        finally { _accountBusy = false; AccountForm.IsEnabled = true; }
-    }
-
-    private async void SignInClicked(object sender, RoutedEventArgs e)
-    {
-        if (_accountBusy || ProjectCatalogEditor.IsBusy) return;
-        _accountBusy = true;
-        AccountForm.IsEnabled = false;
-        HideProjectManagement();
-        AccountStatusText.Text = "Signing in…";
-        try
-        {
-            await ShowAccountAsync(await _api.LoginAsync(UsernameInput.Text.Trim(), PasswordInput.Password));
-            if (ProjectManagementTab.Visibility == Visibility.Visible) ProjectManagementTab.IsSelected = true;
-        }
-        catch (Exception ex) { AccountStatusText.Text = ex.Message; }
-        finally { PasswordInput.Clear(); _accountBusy = false; AccountForm.IsEnabled = true; }
-    }
-
-    private async void SignOutClicked(object sender, RoutedEventArgs e)
-    {
-        if (_accountBusy || ProjectCatalogEditor.IsBusy) return;
-        _accountBusy = true;
-        AccountForm.IsEnabled = false;
-        HideProjectManagement();
-        try { await _api.LogoutAsync(); AccountStatusText.Text = "Signed out."; }
-        catch (Exception ex) { AccountStatusText.Text = $"Unable to sign out. {ex.Message}"; }
-        finally { PasswordInput.Clear(); _accountBusy = false; AccountForm.IsEnabled = true; }
+        ProjectManagementTab.Visibility = Visibility.Visible;
+        await ProjectCatalogEditor.InitializeAsync(_api);
     }
 
     private async void ReloadProfileClicked(object sender, RoutedEventArgs e) => await LoadProfileAsync();
@@ -111,6 +73,7 @@ public partial class NotificationSettingsDialog : Window
             var machineName = Environment.MachineName;
             var profile = await _api.GetPersonalInformationAsync(machineName);
             _profileMachineName = machineName;
+            await ShowEmployeeAccessAsync(profile);
             FirstNameTextBox.Text = profile.FirstName ?? "";
             MiddleNameTextBox.Text = profile.MiddleName ?? "";
             LastNameTextBox.Text = profile.LastName ?? "";
@@ -120,12 +83,14 @@ public partial class NotificationSettingsDialog : Window
             _invalidBirthDate = false;
             CivilStatusTextBox.Text = profile.CivilStatus ?? "";
             NationalityTextBox.Text = profile.Nationality ?? "";
+            EmailTextBox.Text = profile.Email ?? "";
             AddressTextBox.Text = profile.Address ?? "";
             ProfileStatusText.Text = "Changes are saved to your employee record.";
             ProfileForm.IsEnabled = true;
         }
         catch (Exception ex)
         {
+            HidePrivilegedTabs();
             ProfileStatusText.Text = $"Unable to load personal information. {ex.Message}";
         }
         finally { ReloadProfileButton.IsEnabled = true; }
@@ -145,12 +110,27 @@ public partial class NotificationSettingsDialog : Window
             ProfileStatusText.Text = "Birth date cannot be in the future.";
             return;
         }
+        var email = EmailTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            ProfileStatusText.Text = "Enter an email address to save your personal information.";
+            EmailTextBox.Focus();
+            return;
+        }
+        if (!new EmailAddressAttribute().IsValid(email))
+        {
+            ProfileStatusText.Text = "Enter a valid email address, for example name@example.com.";
+            EmailTextBox.Focus();
+            EmailTextBox.SelectAll();
+            return;
+        }
         var profile = new EmployeePersonalInformation
         {
             FirstName = FirstNameTextBox.Text.Trim(), MiddleName = MiddleNameTextBox.Text.Trim(),
             LastName = LastNameTextBox.Text.Trim(), Suffix = SuffixTextBox.Text.Trim(),
             Gender = GenderTextBox.Text.Trim(), BirthDate = BirthDatePicker.SelectedDate,
             CivilStatus = CivilStatusTextBox.Text.Trim(), Nationality = NationalityTextBox.Text.Trim(),
+            Email = email,
             Address = AddressTextBox.Text.Trim()
         };
         _savingProfile = true;
@@ -176,7 +156,7 @@ public partial class NotificationSettingsDialog : Window
 
     private void SaveClicked(object sender, RoutedEventArgs e)
     {
-        if (_savingProfile || _accountBusy || ProjectCatalogEditor.IsBusy) return;
+        if (_savingProfile || ProjectCatalogEditor.IsBusy) return;
         if (!TryParseTime(MorningTimeTextBox.Text, out var morning))
         {
             ShowValidationMessage("Enter a valid morning time in HH:mm format.", MorningTimeTextBox);
@@ -216,6 +196,6 @@ public partial class NotificationSettingsDialog : Window
 
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
-        if (!_savingProfile && !_accountBusy && !ProjectCatalogEditor.IsBusy) DialogResult = false;
+        if (!_savingProfile && !ProjectCatalogEditor.IsBusy) DialogResult = false;
     }
 }

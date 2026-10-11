@@ -62,30 +62,13 @@
                 </StackPanel>
                 </StackPanel>
                 </TabItem>
-                <TabItem Header="Account">
-                    <StackPanel Margin="12,16,12,8">
-                        <TextBlock Text="Sign in with your timesheet portal account to manage project settings."
-                                   TextWrapping="Wrap" Margin="0,0,0,12"/>
-                        <StackPanel x:Name="AccountForm">
-                            <TextBlock Text="Username"/>
-                            <TextBox x:Name="UsernameInput" MaxLength="256" Margin="0,4,0,12"/>
-                            <TextBlock Text="Password"/>
-                            <PasswordBox x:Name="PasswordInput" Margin="0,4,0,12" Padding="8"/>
-                            <StackPanel Orientation="Horizontal">
-                                <Button Content="Sign in" Click="SignInClicked"/>
-                                <Button Content="Sign out" Click="SignOutClicked"/>
-                            </StackPanel>
-                        </StackPanel>
-                        <TextBlock x:Name="AccountStatusText" Text="Not signed in." TextWrapping="Wrap" Margin="0,12,0,0"/>
-                    </StackPanel>
-                </TabItem>
                 <TabItem x:Name="ProjectManagementTab" Header="Project management" Visibility="Collapsed">
                     <local:CatalogEditor x:Name="ProjectCatalogEditor"/>
                 </TabItem>
                 <TabItem Header="Personal information">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="500">
                         <StackPanel Margin="12,16,12,8">
-                            <TextBlock Text="Edit the employee record whose identity key matches this computer name."
+                            <TextBlock Text="Edit the employee record linked to this computer name."
                                        Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"/>
                             <TextBlock x:Name="ProfileStatusText" Text="Loading personal information…"
                                        TextWrapping="Wrap" Margin="0,0,0,10" AutomationProperties.LiveSetting="Polite"/>
@@ -108,6 +91,8 @@
                                 <TextBox x:Name="CivilStatusTextBox" MaxLength="50" Margin="0,2,0,8"/>
                                 <TextBlock Text="Nationality"/>
                                 <TextBox x:Name="NationalityTextBox" MaxLength="100" Margin="0,2,0,8"/>
+                                <TextBlock Text="Email address *"/>
+                                <TextBox x:Name="EmailTextBox" MaxLength="320" Margin="0,2,0,8"/>
                                 <TextBlock Text="Address"/>
                                 <TextBox x:Name="AddressTextBox" MaxLength="1000" AcceptsReturn="True"
                                          TextWrapping="Wrap" MinHeight="70" Margin="0,2,0,12"/>

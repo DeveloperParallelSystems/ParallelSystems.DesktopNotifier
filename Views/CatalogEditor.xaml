@@ -10,6 +10,10 @@
                 <ComboBoxItem Content="Task Categories" Tag="tasks"/>
                 <ComboBoxItem Content="Levels" Tag="levels"/>
             </ComboBox>
+            <TextBlock x:Name="ProjectLabel" Text="Project" Margin="0,0,0,4" Visibility="Collapsed"/>
+            <ComboBox x:Name="ProjectSelector" DisplayMemberPath="Name" SelectionChanged="ProjectChanged" Margin="0,0,0,10" Visibility="Collapsed"/>
+            <TextBlock x:Name="LevelLabel" Text="Level" Margin="0,0,0,4" Visibility="Collapsed"/>
+            <ComboBox x:Name="LevelSelector" DisplayMemberPath="Name" Margin="0,0,0,10" Visibility="Collapsed"/>
             <ListBox x:Name="ItemsList" Height="200" DisplayMemberPath="Name" SelectionChanged="ItemChanged"/>
             <TextBlock Text="Name" Margin="0,12,0,4"/>
             <TextBox x:Name="NameInput" MaxLength="500"/>
