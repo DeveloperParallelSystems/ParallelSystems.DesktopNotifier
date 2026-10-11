@@ -41,7 +41,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ObservableCollection<ProjectModel> Projects { get; } = [];
     public ObservableCollection<ClientModel> Clients { get; } = [];
     public ObservableCollection<string> TaskCategories { get; } = [];
-    public ObservableCollection<string> PackageNames { get; } = [];
+    public ObservableCollection<PackageNameOptionModel> PackageNames { get; } = [];
+    public ObservableCollection<LevelOptionModel> Levels { get; } = [];
     public ObservableCollection<ManualSessionModel> ManualSessions { get; } = [];
     public IReadOnlyList<TimeSpan> TimeOptions { get; } =
         Enumerable.Range(0, 96).Select(index => TimeSpan.FromMinutes(index * 15)).ToList();
@@ -71,6 +72,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 OnPropertyChanged(nameof(SelectedWorkDate));
                 _ = RefreshSelectedDateStatusAsync(value);
             }
+
         }
     }
     public DateTime? SelectedWorkDate
@@ -85,7 +87,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string Status { get => _status; private set => Set(ref _status, value); }
     public bool HasError { get => _hasError; private set => Set(ref _hasError, value); }
     public bool IsLoadingData => _dataLoadCount > 0;
-    public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) { OnPropertyChanged(nameof(IsEditingEnabled)); SubmitCommand.RaiseCanExecuteChanged(); AddManualCommand.RaiseCanExecuteChanged(); } } }
+    public bool IsBusy { get => _busy; private set { if (Set(ref _busy, value)) { OnPropertyChanged(nameof(IsEditingEnabled)); SubmitCommand.RaiseCanExecuteChanged(); AddManualCommand.RaiseCanExecuteChanged(); NotificationSettingsCommand.RaiseCanExecuteChanged(); } } }
     public bool IsEditingEnabled => !IsBusy && !_updateShutdown.IsQuiescing;
     public double RequiredHours => _settings.RequiredHoursPerDay;
     public double ManualHours => ManualSessions.Sum(x => Math.Max(0, x.EngagedTime.TotalHours));
@@ -117,7 +119,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _notificationStateStore.Write(_notificationState);
         });
         RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !_updateShutdown.IsQuiescing);
-        NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule());
+        NotificationSettingsCommand = new RelayCommand(_ => EditNotificationSchedule(), _ => !IsBusy && !_updateShutdown.IsQuiescing);
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () =>
             !IsBusy && !_updateShutdown.IsQuiescing && SelectedDate.HasValue &&
             (ManualSessions.Count > 0 || _deletedManualSessionIds.Count > 0));
@@ -145,6 +147,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
             var packageNamesTask = _api.GetPackageNamesAsync();
+            var levelsTask = _api.GetLevelsAsync();
             try { await ProcessDueNotificationsAsync(DateTime.Now); }
             catch (Exception ex) { SetStatus($"Notification check failed: {ex.Message}", true); }
             foreach (var project in await projectsTask) Projects.Add(project);
@@ -153,6 +156,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
             PackageNames.Clear();
             foreach (var name in await packageNamesTask) PackageNames.Add(name);
+            Levels.Clear();
+            foreach (var level in await levelsTask) Levels.Add(level);
+            foreach (var row in ManualSessions) UpdateManualSessionOptions(row);
             await RefreshSelectedDateStatusAsync(SelectedDate);
             _pollTask = PollAsync(_stop.Token);
             if (!HasError)
@@ -290,7 +296,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var clientsTask = _api.GetClientsAsync();
             var categoriesTask = _api.GetTaskCategoriesAsync();
             var packageNamesTask = _api.GetPackageNamesAsync();
-            await Task.WhenAll(projectsTask, clientsTask, categoriesTask, packageNamesTask);
+            var levelsTask = _api.GetLevelsAsync();
+            await Task.WhenAll(projectsTask, clientsTask, categoriesTask, packageNamesTask, levelsTask);
             var projects = await projectsTask;
             Projects.Clear();
             foreach (var project in projects) Projects.Add(project);
@@ -302,6 +309,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             foreach (var category in await categoriesTask) TaskCategories.Add(category);
             PackageNames.Clear();
             foreach (var name in await packageNamesTask) PackageNames.Add(name);
+            Levels.Clear();
+            foreach (var level in await levelsTask) Levels.Add(level);
             SetStatus(ManualSessions.Count == 0
                 ? "No sessions for the selected date."
                 : $"Loaded {ManualSessions.Count} session(s).");
@@ -315,7 +324,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_updateShutdown.IsQuiescing || !SelectedDate.HasValue) return;
         var duration = TimeSpan.FromHours(Math.Clamp(Math.Max(1, RemainingHours), 0.25, 23.75));
         var row = new ManualSessionModel { EngagedTime = duration };
-        row.PropertyChanged += (_, _) => RaiseSummary();
+        AttachManualSession(row);
+        UpdateManualSessionOptions(row);
         ManualSessions.Add(row);
     }
 
@@ -360,7 +370,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     PackageName = existing.PackageName,
                     Notes = existing.Notes
                 };
-                row.PropertyChanged += (_, _) => RaiseSummary();
+                AttachManualSession(row);
+                UpdateManualSessionOptions(row);
                 ManualSessions.Add(row);
             }
             _savedSessions = SessionSnapshot();
@@ -492,17 +503,108 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(RemainingDuration));
         OnPropertyChanged(nameof(TotalDuration));
     }
+
+    private void AttachManualSession(ManualSessionModel row)
+    {
+        var lastProject = row.ProjectName;
+        var lastLevel = row.Level;
+        var updating = false;
+        row.PropertyChanged += (_, args) =>
+        {
+            if (updating) return;
+            if (args.PropertyName == nameof(ManualSessionModel.ProjectName))
+            {
+                if (!string.Equals(lastProject, row.ProjectName, StringComparison.Ordinal))
+                {
+                    updating = true;
+                    row.Level = null;
+                    row.PackageName = null;
+                    updating = false;
+                    lastProject = row.ProjectName;
+                    lastLevel = null;
+                }
+                UpdateManualSessionOptions(row);
+            }
+            else if (args.PropertyName == nameof(ManualSessionModel.Level))
+            {
+                if (!string.Equals(lastLevel, row.Level, StringComparison.Ordinal))
+                {
+                    updating = true;
+                    row.PackageName = null;
+                    updating = false;
+                    lastLevel = row.Level;
+                }
+                UpdateManualSessionOptions(row);
+            }
+            RaiseSummary();
+        };
+    }
+
+    private void UpdateManualSessionOptions(ManualSessionModel row)
+    {
+        var projectId = Projects.FirstOrDefault(project =>
+            string.Equals(project.Name, row.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
+        var levels = projectId.HasValue
+            ? Levels.Where(level => level.ProjectId == projectId).Select(level => level.Name).ToList()
+            : new List<string>();
+        row.AvailableLevels.Clear();
+        foreach (var level in levels) row.AvailableLevels.Add(level);
+
+        var levelId = projectId.HasValue
+            ? Levels.FirstOrDefault(level => level.ProjectId == projectId &&
+                string.Equals(level.Name, row.Level, StringComparison.OrdinalIgnoreCase))?.Id
+            : null;
+        var packages = levelId.HasValue
+            ? PackageNames.Where(packageName => packageName.LevelId == levelId)
+                .Select(packageName => packageName.Name).ToList()
+            : new List<string>();
+        row.AvailablePackageNames.Clear();
+        foreach (var packageName in packages) row.AvailablePackageNames.Add(packageName);
+    }
     private static string FormatHours(double hours)
     {
         var duration = TimeSpan.FromHours(Math.Max(0, hours));
         return $"{(int)duration.TotalHours:00}:{duration.Minutes:00}";
     }
-    private void EditNotificationSchedule()
+    private async void EditNotificationSchedule()
     {
         using var activity = _updateShutdown.TryEnter();
         if (activity is null) return;
         var schedule = _notificationSettings.Edit(
             _settings.MorningNotificationAt, _settings.AfternoonNotificationAt);
+        var selections = ManualSessions.Select(row => (Row: row, row.ProjectName, row.PackageName, row.TaskCategory, row.Level)).ToList();
+        IsBusy = true;
+        try
+        {
+            var projectsTask = _api.GetProjectsAsync();
+            var packagesTask = _api.GetPackageNamesAsync();
+            var tasksTask = _api.GetTaskCategoriesAsync();
+            var levelsTask = _api.GetLevelsAsync();
+            await Task.WhenAll(projectsTask, packagesTask, tasksTask, levelsTask);
+            Projects.Clear();
+            foreach (var project in await projectsTask) Projects.Add(project);
+            PackageNames.Clear();
+            foreach (var name in await packagesTask) PackageNames.Add(name);
+            TaskCategories.Clear();
+            foreach (var name in await tasksTask) TaskCategories.Add(name);
+            Levels.Clear();
+            foreach (var name in await levelsTask) Levels.Add(name);
+            foreach (var row in ManualSessions) UpdateManualSessionOptions(row);
+        }
+        catch (Exception ex) { SetStatus($"Could not refresh project settings: {ex.Message}", true); }
+        finally
+        {
+            // Updating ComboBox options must not change unsaved timesheet entries.
+            foreach (var selection in selections)
+            {
+                selection.Row.ProjectName = selection.ProjectName;
+                selection.Row.PackageName = selection.PackageName;
+                selection.Row.TaskCategory = selection.TaskCategory;
+                selection.Row.Level = selection.Level;
+                UpdateManualSessionOptions(selection.Row);
+            }
+            IsBusy = false;
+        }
         if (schedule is null) return;
 
         try

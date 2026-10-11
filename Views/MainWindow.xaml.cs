@@ -22,7 +22,12 @@ public partial class MainWindow : Window
     {
         var status=ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("desktop-notifier",null);
         var action=ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("desktop-notifier",null);
-        ProductUpdatesButton.Content=status+" ▼";
+        var showStatus = status != "Updates";
+        ProductUpdatesIcon.Visibility = showStatus ? Visibility.Collapsed : Visibility.Visible;
+        ProductUpdatesStatus.Visibility = showStatus ? Visibility.Visible : Visibility.Collapsed;
+        ProductUpdatesStatus.Text = status + " ▼";
+        ProductUpdatesButton.ToolTip = status;
+        System.Windows.Automation.AutomationProperties.SetName(ProductUpdatesButton, status);
         UpdateActionMenuItem.Header=action;
         UpdateActionMenuItem.ToolTip=status;
         UpdateActionMenuItem.Visibility=UpdateActionSeparator.Visibility=string.IsNullOrEmpty(action)?Visibility.Collapsed:Visibility.Visible;

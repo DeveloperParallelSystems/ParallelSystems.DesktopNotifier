@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.ComponentModel.DataAnnotations;
 using System.Windows;
 using System.Windows.Input;
 using ParallelSystems.DesktopNotifier.Models;
@@ -28,8 +29,9 @@ public partial class NotificationSettingsDialog : Window
             ProfileStatusText.Text = "Enter a valid birth date that is not in the future, or clear the field.";
         };
         BirthDatePicker.SelectedDateChanged += (_, _) => _invalidBirthDate = false;
+        ProjectCatalogEditor.AccessLost += (_, _) => HidePrivilegedTabs();
         Loaded += async (_, _) => await LoadProfileAsync();
-        Closing += (_, args) => args.Cancel = _savingProfile;
+        Closing += (_, args) => args.Cancel = _savingProfile || ProjectCatalogEditor.IsBusy;
         MorningTime = morning;
         EveningTime = evening;
         MorningTimeTextBox.Text = morning.ToString("HH:mm", CultureInfo.InvariantCulture);
@@ -38,6 +40,24 @@ public partial class NotificationSettingsDialog : Window
         {
             if (args.ButtonState == MouseButtonState.Pressed) DragMove();
         };
+    }
+
+    private void HidePrivilegedTabs()
+    {
+        if (ProjectManagementTab.IsSelected) SettingsTabs.SelectedIndex = 0;
+        ProjectManagementTab.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task ShowEmployeeAccessAsync(EmployeePersonalInformation employee)
+    {
+        if (!employee.CanManageCatalogs)
+        {
+            HidePrivilegedTabs();
+            return;
+        }
+
+        ProjectManagementTab.Visibility = Visibility.Visible;
+        await ProjectCatalogEditor.InitializeAsync(_api);
     }
 
     private async void ReloadProfileClicked(object sender, RoutedEventArgs e) => await LoadProfileAsync();
@@ -53,6 +73,7 @@ public partial class NotificationSettingsDialog : Window
             var machineName = Environment.MachineName;
             var profile = await _api.GetPersonalInformationAsync(machineName);
             _profileMachineName = machineName;
+            await ShowEmployeeAccessAsync(profile);
             FirstNameTextBox.Text = profile.FirstName ?? "";
             MiddleNameTextBox.Text = profile.MiddleName ?? "";
             LastNameTextBox.Text = profile.LastName ?? "";
@@ -62,12 +83,14 @@ public partial class NotificationSettingsDialog : Window
             _invalidBirthDate = false;
             CivilStatusTextBox.Text = profile.CivilStatus ?? "";
             NationalityTextBox.Text = profile.Nationality ?? "";
+            EmailTextBox.Text = profile.Email ?? "";
             AddressTextBox.Text = profile.Address ?? "";
             ProfileStatusText.Text = "Changes are saved to your employee record.";
             ProfileForm.IsEnabled = true;
         }
         catch (Exception ex)
         {
+            HidePrivilegedTabs();
             ProfileStatusText.Text = $"Unable to load personal information. {ex.Message}";
         }
         finally { ReloadProfileButton.IsEnabled = true; }
@@ -87,12 +110,27 @@ public partial class NotificationSettingsDialog : Window
             ProfileStatusText.Text = "Birth date cannot be in the future.";
             return;
         }
+        var email = EmailTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            ProfileStatusText.Text = "Enter an email address to save your personal information.";
+            EmailTextBox.Focus();
+            return;
+        }
+        if (!new EmailAddressAttribute().IsValid(email))
+        {
+            ProfileStatusText.Text = "Enter a valid email address, for example name@example.com.";
+            EmailTextBox.Focus();
+            EmailTextBox.SelectAll();
+            return;
+        }
         var profile = new EmployeePersonalInformation
         {
             FirstName = FirstNameTextBox.Text.Trim(), MiddleName = MiddleNameTextBox.Text.Trim(),
             LastName = LastNameTextBox.Text.Trim(), Suffix = SuffixTextBox.Text.Trim(),
             Gender = GenderTextBox.Text.Trim(), BirthDate = BirthDatePicker.SelectedDate,
             CivilStatus = CivilStatusTextBox.Text.Trim(), Nationality = NationalityTextBox.Text.Trim(),
+            Email = email,
             Address = AddressTextBox.Text.Trim()
         };
         _savingProfile = true;
@@ -118,7 +156,7 @@ public partial class NotificationSettingsDialog : Window
 
     private void SaveClicked(object sender, RoutedEventArgs e)
     {
-        if (_savingProfile) return;
+        if (_savingProfile || ProjectCatalogEditor.IsBusy) return;
         if (!TryParseTime(MorningTimeTextBox.Text, out var morning))
         {
             ShowValidationMessage("Enter a valid morning time in HH:mm format.", MorningTimeTextBox);
@@ -158,6 +196,6 @@ public partial class NotificationSettingsDialog : Window
 
     private void CancelClicked(object sender, RoutedEventArgs e)
     {
-        if (!_savingProfile) DialogResult = false;
+        if (!_savingProfile && !ProjectCatalogEditor.IsBusy) DialogResult = false;
     }
 }

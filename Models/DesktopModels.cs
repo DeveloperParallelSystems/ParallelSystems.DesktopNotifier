@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Collections.ObjectModel;
 
 namespace ParallelSystems.DesktopNotifier.Models;
 
@@ -10,6 +11,8 @@ public sealed class DailyStatusModel
     public long AdditionalSeconds { get; set; }
 }
 public sealed class ProjectModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
+public sealed class LevelOptionModel { public Guid Id { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
+public sealed class PackageNameOptionModel { public Guid Id { get; set; } public Guid? LevelId { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
 public sealed class ClientModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 
 public sealed class TimesheetNotificationEventArgs : EventArgs
@@ -34,6 +37,8 @@ public sealed class ManualSessionModel : INotifyPropertyChanged
     private string? _level;
     private string? _packageName;
     private string? _notes;
+    public ObservableCollection<string> AvailableLevels { get; } = [];
+    public ObservableCollection<string> AvailablePackageNames { get; } = [];
     public string ProjectName { get => _projectName; set => Set(ref _projectName, value); }
     public TimeSpan EngagedTime { get => _engagedTime; set => Set(ref _engagedTime, value); }
     public string TaskCategory { get => _taskCategory; set => Set(ref _taskCategory, value); }
