@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.IO;
@@ -7,7 +8,7 @@ namespace ParallelSystems.DesktopNotifier.Services;
 
 public sealed class AppSettings
 {
-        public string ApiBaseUrl { get; set; } = "http://app.parallelsystems.com.au";
+        public string ApiBaseUrl { get; set; } = "";
     public int CheckIntervalMinutes { get; set; } = 1;
     public double RequiredHoursPerDay { get; set; } = 8;
     public string MorningNotificationTime { get; set; } = "08:00";
@@ -30,7 +31,11 @@ public sealed class AppSettings
         var userPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Parallel Systems", "Desktop Notifier", "notifier.settings.json");
         var path = File.Exists(userPath) ? userPath : File.Exists(legacyPath) ? legacyPath : applicationPath;
-        var value = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) : new AppSettings();
+        AppSettings? value = null;
+        try { value = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), JsonOptions) : null; }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        catch (JsonException) { }
         value ??= new AppSettings();
         var userSchedule = ReadUserNotificationSchedule();
         if (userSchedule is not null)
@@ -42,7 +47,7 @@ public sealed class AppSettings
                 value.AfternoonNotificationTime = userSchedule.AfternoonNotificationTime;
         }
 
-        value.ApiBaseUrl = value.ApiBaseUrl.TrimEnd('/');
+        value.ApiBaseUrl = CommonServerSettings.Resolve(CommonServerSettings.Load(value.ApiBaseUrl));
         value.CheckIntervalMinutes = Math.Clamp(value.CheckIntervalMinutes, 1, 1440);
         value.MorningNotificationAt = ParseNotificationTime(
             value.MorningNotificationTime, nameof(MorningNotificationTime));
@@ -102,4 +107,74 @@ public sealed class AppSettings
     }
 
     internal static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+}
+
+// Keep this resolver equivalent across the independently deployed desktop products.
+internal static class CommonServerSettings
+{
+    internal const string DefaultHost = "app.parallelsystems.com.au";
+    internal static string SettingsPath => System.IO.Path.Combine(
+        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+        "Parallel Systems", "Shared", "common.settings.json");
+
+    internal static bool IsValid(string? value)
+    {
+        System.Uri? uri;
+        return !string.IsNullOrWhiteSpace(value) &&
+            System.Uri.TryCreate(value.Contains("://") ? value.Trim() : "https://" + value.Trim(), System.UriKind.Absolute, out uri) &&
+            (uri.Scheme == "https" || uri.Scheme == "http") &&
+            !string.IsNullOrEmpty(uri.Host) && string.IsNullOrEmpty(uri.UserInfo) &&
+            string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
+    }
+
+    internal static string Load(string? local, string? path = null)
+    {
+        if (IsValid(local)) return local!.Trim().TrimEnd('/');
+        path = path ?? SettingsPath;
+        try
+        {
+            var shared = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(System.IO.File.ReadAllText(path))?.FirstOrDefault(pair => pair.Key.Equals("ApiBaseUrl", System.StringComparison.OrdinalIgnoreCase)).Value;
+            if (IsValid(shared)) return shared!.Trim().TrimEnd('/');
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException || ex is System.UnauthorizedAccessException || ex is System.Text.Json.JsonException || ex is System.InvalidOperationException) { }
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path))!);
+            // Replace unusable shared settings with the default.
+            using (var stream = new System.IO.StreamWriter(new System.IO.FileStream(path, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.Read)))
+                    stream.Write("{\n  \"ApiBaseUrl\": \"" + DefaultHost + "\"\n}");
+        }
+        catch (System.IO.IOException) { }
+        catch (System.UnauthorizedAccessException) { }
+        return DefaultHost;
+    }
+
+    internal static string Resolve(string value)
+    {
+        if (!IsValid(value)) throw new System.ArgumentException("Enter a server host or HTTP(S) URL without credentials, query, or fragment.");
+        value = value.Trim().TrimEnd('/');
+        if (value.Contains("://")) return value;
+        return ResolveAsync(value).GetAwaiter().GetResult();
+    }
+
+    private static async System.Threading.Tasks.Task<string> ResolveAsync(string host)
+    {
+        using (var client = new System.Net.Http.HttpClient(new System.Net.Http.HttpClientHandler { AllowAutoRedirect = false }))
+        {
+            client.Timeout = System.TimeSpan.FromSeconds(2);
+            foreach (var scheme in new[] { "https://", "http://" })
+            {
+                try
+                {
+                    using (var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Head, scheme + host + "/"))
+                    using (var response = await client.SendAsync(request, System.Net.Http.HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false))
+                        return scheme + host; // Any HTTP status proves that the endpoint is reachable.
+                }
+                catch (System.Net.Http.HttpRequestException) { }
+                catch (System.Threading.Tasks.TaskCanceledException) { }
+            }
+        }
+        // An offline startup must not erase the configured host.
+        return "https://" + host;
+    }
 }
