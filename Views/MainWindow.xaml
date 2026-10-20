@@ -177,7 +177,7 @@
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding AvailableLevels}" Text="{Binding Level, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Levels are filtered by the selected project"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Package Name" Width="1.3*">
-                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding AvailablePackageNames}" Text="{Binding PackageName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Package names are filtered by the selected project and level"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding AvailablePackageNames}" Text="{Binding PackageName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Choose a suggestion for the selected project and level, or type a custom package name"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="Task Category" Width="1.3*">
                                 <DataGridTemplateColumn.CellTemplate><DataTemplate><ComboBox IsEditable="True" ItemsSource="{Binding DataContext.TaskCategories, RelativeSource={RelativeSource AncestorType=Window}}" Text="{Binding TaskCategory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Select a task for this entry"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
