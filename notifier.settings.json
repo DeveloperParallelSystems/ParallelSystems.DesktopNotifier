@@ -1,5 +1,6 @@
 {
   "ApiBaseUrl": "http://localhost:5185",
+  "WebAppUrl": "",
   "CheckIntervalMinutes": 1,
   "RequiredHoursPerDay": 8,
   "MorningNotificationTime": "08:00",

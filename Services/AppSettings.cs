@@ -8,7 +8,21 @@ namespace ParallelSystems.DesktopNotifier.Services;
 
 public sealed class AppSettings
 {
-        public string ApiBaseUrl { get; set; } = "";
+    public string ApiBaseUrl { get; set; } = "";
+    public string WebAppUrl { get; set; } = "";
+
+    public Uri GetWebAppUri()
+    {
+        var value = string.IsNullOrWhiteSpace(WebAppUrl)
+            ? new Uri(new Uri(ApiBaseUrl.TrimEnd('/') + "/"), "desktop-notifier").AbsoluteUri
+            : WebAppUrl.Trim();
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != "https" && !(uri.Scheme == "http" && uri.IsLoopback)) ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment) || uri.AbsolutePath.TrimEnd('/') != "/desktop-notifier")
+            throw new InvalidDataException("WebAppUrl must be an HTTPS URL ending in /desktop-notifier (HTTP is allowed for localhost development).");
+        return uri;
+    }
     public int CheckIntervalMinutes { get; set; } = 1;
     public double RequiredHoursPerDay { get; set; } = 8;
     public string MorningNotificationTime { get; set; } = "08:00";

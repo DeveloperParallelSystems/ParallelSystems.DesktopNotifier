@@ -19,6 +19,20 @@ public sealed class DesktopApiClient : IDisposable
     }
     public void Dispose() => _client.Dispose();
 
+    public async Task<object> DashboardRequestAsync(string method, string path, JsonElement body)
+    {
+        if (!DesktopDashboardPolicy.Allows(method, path))
+            throw new BridgeException("accessDenied", "This dashboard operation is not supported.");
+        using var request = new HttpRequestMessage(new HttpMethod(method), "api" + path);
+        request.Headers.Add("X-Parallel-Dashboard", "1");
+        if (body.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            request.Content = JsonContent.Create(body);
+        using var response = await _client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+        var result = string.IsNullOrWhiteSpace(json) ? (JsonElement?)null : JsonSerializer.Deserialize<JsonElement>(json);
+        return new { status = (int)response.StatusCode, body = result };
+    }
+
     public Task<List<CatalogItem>> GetCatalogAsync(string catalog) =>
         SendAsync<List<CatalogItem>>(HttpMethod.Get, $"api/{catalog}");
 

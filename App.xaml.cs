@@ -1,5 +1,4 @@
 using ParallelSystems.DesktopNotifier.Services;
-using ParallelSystems.DesktopNotifier.ViewModels;
 using ParallelSystems.DesktopNotifier.Views;
 using System.Windows;
 
@@ -11,13 +10,14 @@ public partial class App : System.Windows.Application
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showMain;
     private RegisteredWaitHandle? _showMainRegistration;
-    private MainViewModel? _viewModel;
+    private NotifierService? _service;
+    private DesktopBridge? _bridge;
     private MainWindow? _window;
     private NotificationService? _notifications;
     private UpdateShutdownServer? _updateServer;
     private bool _exitingForUpdate;
 
-    protected override async void OnStartup(StartupEventArgs e)
+    protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out var isFirstInstance);
@@ -37,35 +37,35 @@ public partial class App : System.Windows.Application
             var settings = AppSettings.Load();
             var api = new DesktopApiClient(settings);
             _notifications = new NotificationService();
-            _viewModel = new MainViewModel(api, settings, new ConfirmationService(),
-                new NotificationSettingsService(api), new NotificationStateStore());
-            _window = new MainWindow { DataContext = _viewModel };
+            _service = new NotifierService(api, settings, new NotificationStateStore());
+            _bridge = new DesktopBridge(api, _service);
+            _window = new MainWindow(settings, _bridge);
             _window.Closing += (_, args) => { if (!_exitingForUpdate) { args.Cancel = true; _window.Hide(); } };
             _notifications.OpenRequested += (_, request) =>
             {
-                if (_viewModel.IsUpdateShutdownPending) return;
+                if (_bridge.IsPreparing) return;
                 _window.Show();
                 _window.WindowState = WindowState.Normal;
                 _window.Activate();
-                _viewModel.OpenFromNotification(request.WorkDate);
+                _bridge.OpenDate(request.WorkDate);
             };
             _notifications.ExitRequested += (_, _) => Shutdown();
-            _viewModel.NotificationRequested += (_, notification) => _notifications.Show(notification);
-            _viewModel.NotificationDismissRequested += (_, _) => _notifications.Dismiss();
-            await _viewModel.InitializeAsync();
+            _service.NotificationRequested += (_, notification) => _notifications.Show(notification);
+            _service.NotificationDismissRequested += (_, _) => _notifications.Dismiss();
+            _service.Start();
             ParallelSystems.ProductSupport.ProductLifecycle.Report("desktop-notifier", null, Environment.ProcessPath!, "ready");
             ParallelSystems.ProductSupport.ProductLifecycle.EnsureUpdaterBackground();
             _showMainRegistration = ThreadPool.RegisterWaitForSingleObject(_showMain,
                 (_, _) => Dispatcher.BeginInvoke(ShowMainWindow), null, Timeout.Infinite, false);
             if (e.Args.Contains("--show-main")) ShowMainWindow();
             _updateServer = new UpdateShutdownServer("ParallelSystems.DesktopNotifier",
-                token => Dispatcher.InvokeAsync(() => _viewModel.PrepareForUpdate(), System.Windows.Threading.DispatcherPriority.Normal, token).Task,
+                async token => await await Dispatcher.InvokeAsync(() => _bridge.PrepareForUpdateAsync(token), System.Windows.Threading.DispatcherPriority.Normal, token),
                 async () => await await Dispatcher.InvokeAsync(async () => {
-                    await _viewModel.CompleteUpdateShutdownAsync();
+                    await _service.CompleteUpdateAsync();
                     _exitingForUpdate = true;
                     Shutdown();
                 }),
-                () => Dispatcher.HasShutdownStarted ? Task.CompletedTask : Dispatcher.InvokeAsync(() => _viewModel.AbortUpdateShutdown()).Task);
+                () => Dispatcher.HasShutdownStarted ? Task.CompletedTask : Dispatcher.InvokeAsync(() => _bridge.AbortUpdate()).Task);
         }
         catch (Exception ex)
         {
@@ -77,7 +77,7 @@ public partial class App : System.Windows.Application
 
     private void ShowMainWindow()
     {
-        if (_window is null || _viewModel is null || _viewModel.IsUpdateShutdownPending) return;
+        if (_window is null || _bridge is null || _bridge.IsPreparing) return;
         _window.Show();
         _window.WindowState = WindowState.Normal;
         _window.Activate();
@@ -88,7 +88,7 @@ public partial class App : System.Windows.Application
         _showMainRegistration?.Unregister(null);
         _showMain?.Dispose();
         _updateServer?.Stop();
-        _viewModel?.Dispose();
+        _service?.Dispose();
         _notifications?.Dispose();
         if (_singleInstanceMutex is not null)
         {
