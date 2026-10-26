@@ -27,7 +27,7 @@ public sealed class DesktopBridge : IDisposable
     private readonly DesktopApiClient _api;
     private readonly NotifierService _service;
     private readonly DateOnly? _promptDate;
-    public event Action<DateOnly>? ContinuePromptRequested;
+    public event Action<DateOnly, IReadOnlyList<ManualEntryPromptSession>>? ContinuePromptRequested;
     private TaskCompletionSource<bool>? _freeze;
     private string? _freezeId;
     private bool _preparing;
@@ -35,6 +35,8 @@ public sealed class DesktopBridge : IDisposable
     private bool _ready;
     private int _active;
     private DateOnly? _pendingDate;
+    private IReadOnlyList<ManualEntryPromptSession>? _pendingSuggestions;
+    private bool _pendingForceReload;
     public bool HasPendingEdits { get; private set; }
     public bool IsPreparing => _preparing || _service.IsQuiescing;
     public event Action<string, object?>? Event;
@@ -42,19 +44,26 @@ public sealed class DesktopBridge : IDisposable
     {
         _api = api; _service = service; _promptDate = promptDate;
         service.Changed += ServiceChanged;
+        service.PromptSubmitted += OnPromptSubmitted;
     }
     private void ServiceChanged(object? sender, EventArgs args) => PublishStatus();
-    public void Dispose() { PageUnloaded(); _service.Changed -= ServiceChanged; }
+    private void OnPromptSubmitted(DateOnly workDate)
+    {
+        if (_promptDate is null) OpenDate(workDate, [], forceReload: true);
+    }
+    public void Dispose() { PageUnloaded(); _service.Changed -= ServiceChanged; _service.PromptSubmitted -= OnPromptSubmitted; }
     public void PageUnloaded()
     {
         _ready = false;
         _freeze?.TrySetResult(false);
     }
     public void PublishStatus() { if (_ready) Event?.Invoke("status", _service.Snapshot()); }
-    public void OpenDate(DateOnly? date)
+    public void OpenDate(DateOnly? date, IReadOnlyList<ManualEntryPromptSession>? suggestions = null, bool forceReload = false)
     {
         _pendingDate = date ?? DateOnly.FromDateTime(DateTime.Today);
-        if (_ready) Event?.Invoke("navigate", new { workDate = _pendingDate });
+        _pendingSuggestions = suggestions;
+        _pendingForceReload = forceReload;
+        if (_ready) Event?.Invoke("navigate", new { workDate = _pendingDate, suggestions = _pendingSuggestions, forceReload = _pendingForceReload });
     }
     public async Task<string> PrepareForUpdateAsync(CancellationToken token)
     {
@@ -132,7 +141,11 @@ public sealed class DesktopBridge : IDisposable
                         var sessions = payload.GetProperty("sessions").Deserialize<List<ManualEntryPromptSession>>(AppSettings.JsonOptions)
                             ?? throw new ArgumentException("Sessions are required.");
                         return await _service.SubmitPromptSessionsAsync(promptDate, sessions);
-                    case "continuePrompt": ContinuePromptRequested?.Invoke(promptDate); return null;
+                    case "continuePrompt":
+                        var suggestions = payload.GetProperty("sessions").Deserialize<List<ManualEntryPromptSession>>(AppSettings.JsonOptions)
+                            ?? throw new ArgumentException("Suggested sessions are required.");
+                        ContinuePromptRequested?.Invoke(promptDate, suggestions);
+                        return null;
                     default: throw new BridgeException("unknownOperation", "This operation is not available in the reminder.");
                 }
             }
@@ -143,11 +156,16 @@ public sealed class DesktopBridge : IDisposable
                         payload.TryGetProperty("body", out var body) ? body : default);
                 case "ready":
                     _ready = true;
-                    if (_pendingDate is { } date) Event?.Invoke("navigate", new { workDate = date });
+                    if (_pendingDate is { } date) Event?.Invoke("navigate", new { workDate = date, suggestions = _pendingSuggestions, forceReload = _pendingForceReload });
                     Event?.Invoke("status", _service.Snapshot());
                     return null;
                 case "navigationHandled":
-                    if (payload.TryGetProperty("workDate", out var handled) && handled.GetString() == _pendingDate?.ToString("yyyy-MM-dd")) _pendingDate = null;
+                    if (payload.TryGetProperty("workDate", out var handled) && handled.GetString() == _pendingDate?.ToString("yyyy-MM-dd"))
+                    {
+                        _pendingDate = null;
+                        _pendingSuggestions = null;
+                        _pendingForceReload = false;
+                    }
                     return null;
                 case "options": return new { projects = await _api.GetProjectsAsync(), clients = await _api.GetClientsAsync(),
                     levels = await _api.GetLevelsAsync(), packageNames = await _api.GetPackageNamesAsync(), taskCategories = await _api.GetTaskCategoriesAsync() };

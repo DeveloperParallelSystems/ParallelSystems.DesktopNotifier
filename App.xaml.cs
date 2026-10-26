@@ -50,11 +50,11 @@ public partial class App : System.Windows.Application
             {
                 if (_entryPrompt is { IsVisible: true }) return;
                 _entryPrompt = new ManualEntryPromptWindow(_service, api, workDate);
-                _entryPrompt.ContinueRequested += date =>
+                _entryPrompt.ContinueRequested += (date, suggestions) =>
                 {
                     _service.DeferEntryPrompt(date);
                     ShowMainWindow();
-                    _bridge.OpenDate(date);
+                    _bridge.OpenDate(date, suggestions);
                 };
                 _entryPrompt.Closed += (_, _) => _entryPrompt = null;
                 _entryPrompt.Show();

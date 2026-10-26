@@ -15,12 +15,15 @@ Add changes here as they are completed. Move them into a dated version section w
 ### Added
 
 - A loading indicator while timesheet data is being retrieved.
-- A persistent 1 p.m. work-session prompt prefilled from yesterday's entries.
+- A persistent 1 p.m. work-session prompt prefilled from recent entries.
 - A notification settings dialog for changing the morning and evening reminder times.
 - Per-user persistence for notification schedule changes.
 
 ### Changed
 
+- Automatically reloaded the main timesheet after a successful notifier prompt submission.
+- Prefilled the entry prompt from the most recent prior workday and carried suggestions into the main window on handoff.
+- Expanded a sole suggested session by default and kept multiple suggested sessions collapsed.
 - Renamed the timesheet duration field to hours and displayed values as `HH:mm` without seconds or decimal values.
 - Replaced user-facing manual-timesheet wording with timesheet wording.
 - Replaced the notification-settings and refresh labels with compact icon buttons.

@@ -24,6 +24,7 @@ public sealed class NotifierService : IDisposable
     public event EventHandler? NotificationDismissRequested;
     public event Action<DateOnly>? EntryPromptRequested;
     public event Action<DateOnly>? EntryPromptDismissRequested;
+    public event Action<DateOnly>? PromptSubmitted;
     public event EventHandler? Changed;
 
     public NotifierService(DesktopApiClient api, AppSettings settings, NotificationStateStore store)
@@ -82,8 +83,14 @@ public sealed class NotifierService : IDisposable
         var levelsTask = _api.GetLevelsAsync();
         var packageNamesTask = _api.GetPackageNamesAsync();
         var taskCategoriesTask = _api.GetTaskCategoriesAsync();
-        var previousSessionsTask = _api.GetManualSessionsAsync(device.Id, workDate.AddDays(-1));
-        await Task.WhenAll(projectsTask, clientsTask, levelsTask, packageNamesTask, taskCategoriesTask, previousSessionsTask);
+        var recentSessionDatesTask = _api.GetSessionDatesAsync(device.Id, workDate.AddDays(-366), workDate.AddDays(-1));
+        await Task.WhenAll(projectsTask, clientsTask, levelsTask, packageNamesTask, taskCategoriesTask, recentSessionDatesTask);
+        var previousSessions = new List<ExistingManualSessionModel>();
+        foreach (var recentDate in (await recentSessionDatesTask).OrderByDescending(date => date))
+        {
+            previousSessions = await _api.GetManualSessionsAsync(device.Id, recentDate);
+            if (previousSessions.Count > 0) break;
+        }
         return new ManualEntryPromptData
         {
             Projects = await projectsTask,
@@ -91,7 +98,7 @@ public sealed class NotifierService : IDisposable
             Levels = await levelsTask,
             PackageNames = await packageNamesTask,
             TaskCategories = await taskCategoriesTask,
-            PreviousSessions = await previousSessionsTask
+            PreviousSessions = previousSessions
         };
     }
     public async Task<SubmitResponse> SubmitPromptSessionsAsync(DateOnly workDate, IReadOnlyList<ManualEntryPromptSession> sessions)
@@ -142,6 +149,7 @@ public sealed class NotifierService : IDisposable
         }
         var response = await _api.SubmitAsync(request);
         RecordSubmission(workDate, true);
+        PromptSubmitted?.Invoke(workDate);
         return response;
     }
     public void SaveSchedule(TimeOnly morning, TimeOnly evening, bool? adminDisableInAndOutNotifications = null)
@@ -176,7 +184,7 @@ public sealed class NotifierService : IDisposable
                 Message = "No timesheet exists for yesterday. Click to add one."
             });
         }
-        if (time >= new TimeOnly(13, 0))
+        if (time >= new TimeOnly(1, 0))
         {
             var information = await _api.GetPersonalInformationAsync(Environment.MachineName);
             if (information.TimesheetNotificationsEnabled != true)

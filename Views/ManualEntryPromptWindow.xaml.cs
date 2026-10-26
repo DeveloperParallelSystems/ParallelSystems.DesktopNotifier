@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Runtime.InteropServices;
+using ParallelSystems.DesktopNotifier.Models;
 using ParallelSystems.DesktopNotifier.Services;
 
 namespace ParallelSystems.DesktopNotifier.Views;
@@ -10,7 +11,7 @@ public sealed class ManualEntryPromptWindow : MainWindow
 {
     private bool _allowClose;
     public DateOnly WorkDate { get; }
-    public event Action<DateOnly>? ContinueRequested;
+    public event Action<DateOnly, IReadOnlyList<ManualEntryPromptSession>>? ContinueRequested;
 
     public ManualEntryPromptWindow(NotifierService service, DesktopApiClient api, DateOnly workDate, string? userDataFolder = null)
         : this(service, new DesktopBridge(api, service, workDate), workDate, userDataFolder) { }
@@ -31,7 +32,7 @@ public sealed class ManualEntryPromptWindow : MainWindow
         Left = area.Right - Width - 16;
         Top = area.Bottom - Height - 16;
         SourceInitialized += (_, _) => DisableWindowControls();
-        bridge.ContinuePromptRequested += date => ContinueRequested?.Invoke(date);
+        bridge.ContinuePromptRequested += (date, sessions) => ContinueRequested?.Invoke(date, sessions);
         Closing += (_, args) => args.Cancel = !_allowClose;
         Closed += (_, _) => bridge.Dispose();
         // Recovery remains usable when the website or WebView2 cannot start.
@@ -39,7 +40,7 @@ public sealed class ManualEntryPromptWindow : MainWindow
             Content = "Continue in main window", HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             Margin = new Thickness(0, 12, 0, 0)
         };
-        continueButton.Click += (_, _) => ContinueRequested?.Invoke(WorkDate);
+        continueButton.Click += (_, _) => ContinueRequested?.Invoke(WorkDate, []);
         ((System.Windows.Controls.StackPanel)Recovery.Child).Children.Add(continueButton);
     }
 

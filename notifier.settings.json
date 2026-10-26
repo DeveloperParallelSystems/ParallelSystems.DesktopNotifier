@@ -3,6 +3,7 @@
   "WebAppUrl": "",
   "CheckIntervalMinutes": 1,
   "RequiredHoursPerDay": 8,
+  "AdminDisableInAndOutNotifications": false,
   "MorningNotificationTime": "08:00",
   "AfternoonNotificationTime": "16:00"
 }
