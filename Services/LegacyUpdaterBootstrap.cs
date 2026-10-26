@@ -117,8 +117,11 @@ namespace ParallelSystems.ProductSupport
         private static bool NeedsBootstrap(string root)
         {
             // Inspect the active app, not the stable launcher or a stale status heartbeat.
-            var assembly = Path.Combine(ActiveDirectory(root), "ParallelSystems.Updater.dll");
-            return File.Exists(assembly) && IsLegacyVersion(FileVersionInfo.GetVersionInfo(assembly).FileVersion);
+            var active = ActiveDirectory(root);
+            var executable = Path.Combine(active, "ParallelSystems.Updater.exe");
+            var assembly = Path.Combine(active, "ParallelSystems.Updater.dll");
+            var versionFile = File.Exists(executable) ? executable : assembly;
+            return File.Exists(versionFile) && IsLegacyVersion(FileVersionInfo.GetVersionInfo(versionFile).FileVersion);
         }
 
         internal static bool IsBootstrapCandidate(string json, string version, string channel)
