@@ -255,7 +255,7 @@ public sealed class DesktopBridge : IDisposable
     private static DateOnly WorkDate(JsonElement payload)
     {
         var date = DateOnly.ParseExact(Text(payload, "workDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return date <= DateOnly.FromDateTime(DateTime.Today) ? date : throw new ArgumentException("Choose today or an earlier date.");
+        return date;
     }
     private static string Text(JsonElement value, string key) => value.GetProperty(key).GetString() ?? throw new ArgumentException($"{key} is required.");
     private static bool Flag(JsonElement value, string key) => value.GetProperty(key).GetBoolean();
