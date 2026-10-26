@@ -13,12 +13,17 @@ public sealed class NotifierService : IDisposable
     private readonly UpdateShutdownGate _gate = new();
     private Task<DeviceModel>? _device;
     private Task _poll = Task.CompletedTask;
+    private DateOnly? _entryPromptRaisedDate;
+    private DateOnly? _entryPromptDeferredDate;
+    private DateOnly? _entryPromptSuppressedDate;
     public AppSettings Settings { get; }
     public MissingTimesheetAlertViewModel Alert { get; }
     public string Status { get; private set; } = "Starting…";
     public bool IsQuiescing => _gate.IsQuiescing;
     public event EventHandler<TimesheetNotificationEventArgs>? NotificationRequested;
     public event EventHandler? NotificationDismissRequested;
+    public event Action<DateOnly>? EntryPromptRequested;
+    public event Action<DateOnly>? EntryPromptDismissRequested;
     public event EventHandler? Changed;
 
     public NotifierService(DesktopApiClient api, AppSettings settings, NotificationStateStore store)
@@ -51,7 +56,92 @@ public sealed class NotifierService : IDisposable
     public void RecordSubmission(DateOnly date, bool hasRows)
     {
         if (hasRows) Alert.RecordSubmission(date);
+        if (hasRows && date == DateOnly.FromDateTime(DateTime.Today))
+            EntryPromptDismissRequested?.Invoke(date);
         NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
+    }
+    public void DeferEntryPrompt(DateOnly date)
+    {
+        if (date != DateOnly.FromDateTime(DateTime.Today)) return;
+        _entryPromptDeferredDate = date;
+        EntryPromptDismissRequested?.Invoke(date);
+    }
+    public void ResumeEntryPrompt(DateOnly date)
+    {
+        if (_entryPromptDeferredDate != date) return;
+        _entryPromptDeferredDate = null;
+        if (_entryPromptRaisedDate == date) _entryPromptRaisedDate = null;
+    }
+    public async Task<ManualEntryPromptData> GetManualEntryPromptDataAsync(DateOnly workDate)
+    {
+        using var lease = EnterOperation();
+        var device = await GetDeviceAsync();
+        var projectsTask = _api.GetProjectsAsync();
+        var clientsTask = _api.GetClientsAsync();
+        var levelsTask = _api.GetLevelsAsync();
+        var packageNamesTask = _api.GetPackageNamesAsync();
+        var taskCategoriesTask = _api.GetTaskCategoriesAsync();
+        var previousSessionsTask = _api.GetManualSessionsAsync(device.Id, workDate.AddDays(-1));
+        await Task.WhenAll(projectsTask, clientsTask, levelsTask, packageNamesTask, taskCategoriesTask, previousSessionsTask);
+        return new ManualEntryPromptData
+        {
+            Projects = await projectsTask,
+            Clients = await clientsTask,
+            Levels = await levelsTask,
+            PackageNames = await packageNamesTask,
+            TaskCategories = await taskCategoriesTask,
+            PreviousSessions = await previousSessionsTask
+        };
+    }
+    public async Task<SubmitResponse> SubmitPromptSessionsAsync(DateOnly workDate, IReadOnlyList<ManualEntryPromptSession> sessions)
+    {
+        using var lease = EnterOperation();
+        if (workDate != DateOnly.FromDateTime(DateTime.Today))
+            throw new ArgumentException("The reminder can only submit today's work.");
+        if (sessions.Count is 0 or > 200)
+            throw new ArgumentException("Add between 1 and 200 work sessions.");
+
+        var projects = await _api.GetProjectsAsync();
+        var clients = await _api.GetClientsAsync();
+        var device = await GetDeviceAsync();
+        var status = await _api.GetStatusAsync(device.Id, workDate);
+        if (status.AdditionalSeconds > 0)
+        {
+            EntryPromptDismissRequested?.Invoke(workDate);
+            throw new InvalidOperationException("A timesheet entry has already been recorded for today. The reminder has closed.");
+        }
+        var start = DateTime.SpecifyKind(workDate.ToDateTime(new TimeOnly(9, 0)), DateTimeKind.Local);
+        var request = new DailySubmitRequest { DeviceId = device.Id, WorkDate = workDate, AllowExistingDate = status.HasDailySession };
+        foreach (var session in sessions)
+        {
+            var project = projects.FirstOrDefault(item => item.Id == session.ProjectId)
+                ?? throw new ArgumentException("Select an existing project for every session.");
+            var client = clients.FirstOrDefault(item => item.Id == session.ClientId)
+                ?? throw new ArgumentException("Select an existing client for every session.");
+            if (session.EngagedSeconds is <= 0 or > 86400)
+                throw new ArgumentException("Hours must be greater than zero and no more than 24.");
+            if (string.IsNullOrWhiteSpace(session.TaskCategory))
+                throw new ArgumentException("Task category is required for every session.");
+            if (session.PackageName?.Trim().Length > 300)
+                throw new ArgumentException("Package name cannot exceed 300 characters.");
+
+            request.ManualSessions.Add(new ManualSubmitModel
+            {
+                ProjectId = project.Id,
+                ProjectName = project.Name,
+                ClientId = client.Id,
+                ClientName = client.Name,
+                Level = session.Level?.Trim(),
+                PackageName = session.PackageName?.Trim(),
+                TaskCategory = session.TaskCategory.Trim(),
+                Notes = session.Notes?.Trim(),
+                StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
+                EndedAtUtc = new DateTimeOffset(start.AddSeconds(session.EngagedSeconds).ToUniversalTime(), TimeSpan.Zero)
+            });
+        }
+        var response = await _api.SubmitAsync(request);
+        RecordSubmission(workDate, true);
+        return response;
     }
     public void SaveSchedule(TimeOnly morning, TimeOnly evening)
     {
@@ -84,6 +174,30 @@ public sealed class NotifierService : IDisposable
                 Message = "No timesheet exists for yesterday. Click to add one."
             });
         }
+        if (time >= new TimeOnly(13, 0))
+        {
+            var information = await _api.GetPersonalInformationAsync(Environment.MachineName);
+            if (information.TimesheetNotificationsEnabled != true)
+            {
+                _entryPromptSuppressedDate = date;
+                EntryPromptDismissRequested?.Invoke(date);
+            }
+            else if (_entryPromptSuppressedDate == date)
+            {
+                _entryPromptSuppressedDate = null;
+            }
+            if (information.TimesheetNotificationsEnabled == true)
+            {
+                var status = await _api.GetStatusAsync(device.Id, date);
+                if (status.AdditionalSeconds > 0)
+                    EntryPromptDismissRequested?.Invoke(date);
+                else if (_entryPromptRaisedDate != date && _entryPromptDeferredDate != date)
+                {
+                    _entryPromptRaisedDate = date;
+                    EntryPromptRequested?.Invoke(date);
+                }
+            }
+        }
         Status = $"Monitoring {Environment.MachineName}. Morning: {Settings.MorningNotificationAt:HH:mm}; evening: {Settings.AfternoonNotificationAt:HH:mm}.";
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -114,6 +228,12 @@ public sealed class NotifierService : IDisposable
         {
             var next = now.Date.Add(time.ToTimeSpan());
             var remaining = next > now ? next - now : processed == date ? next.AddDays(1) - now : TimeSpan.FromMinutes(1);
+            if (remaining < delay) delay = remaining;
+        }
+        if (_entryPromptRaisedDate != date && _entryPromptDeferredDate != date && _entryPromptSuppressedDate != date)
+        {
+            var prompt = now.Date.Add(new TimeOnly(13, 0).ToTimeSpan());
+            var remaining = prompt > now ? prompt - now : TimeSpan.FromMinutes(1);
             if (remaining < delay) delay = remaining;
         }
         return delay;

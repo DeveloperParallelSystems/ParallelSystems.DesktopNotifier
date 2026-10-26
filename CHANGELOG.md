@@ -15,6 +15,7 @@ Add changes here as they are completed. Move them into a dated version section w
 ### Added
 
 - A loading indicator while timesheet data is being retrieved.
+- A persistent 1 p.m. work-session prompt prefilled from yesterday's entries.
 - A notification settings dialog for changing the morning and evening reminder times.
 - Per-user persistence for notification schedule changes.
 

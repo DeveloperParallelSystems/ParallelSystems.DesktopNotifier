@@ -17,6 +17,8 @@ Dashboard operations use `dashboardRequest` through the native bridge. Native co
 
 The browser profile is `%LOCALAPPDATA%\Parallel Systems\Desktop Notifier\WebView2`, outside versioned installations. `webview.log` alongside it records failure categories, not URLs, messages, or personal-information payloads. Existing reminder settings/state paths are unchanged. There is no offline UI bundle or offline submission queue.
 
+At 1 p.m. local computer time, the notifier checks whether timesheet notifications are enabled for the employee and whether today's timesheet has any recorded time. If notifications are enabled and no time is recorded, it opens a persistent bottom-right prompt with the work-session fields, prefilled from yesterday's entries when available. The prompt can submit today's sessions or hand off to the hosted timesheet in the main window. It remains visible until submission or handoff. An absent preference is treated as disabled; deploy the updated API and `sp_DesktopGetPersonalInformation` with the desktop application.
+
 ## Bridge version 1
 
 Requests: `{ version: 1, id, operation, payload }`. Responses contain the same `version` and `id`, plus `result` or `error: { code, message }`. Events use `{ version: 1, event, payload }`.
@@ -37,4 +39,4 @@ The page freezes controls synchronously before acknowledging `prepareUpdate`. Na
 
 Before rollout, test the installer on clean Windows accounts with and without Evergreen, plus offline/proxy installation failure. Verify startup registration, close-to-tray, a second `--show-main` launch, notification navigation, API/website outage recovery, and prepare/abort/commit through the real updater. The automated browser suite uses a simulated native transport; it does not substitute for the Windows host smoke check.
 
-Legacy WPF view-model/dialog code remains for existing regression fixtures; the running application does not instantiate these screens. The sole production frontend is the hosted page, with a small native loading/recovery surface.
+The hosted page remains the main timesheet frontend. Native WPF surfaces include loading/recovery and the 1 p.m. entry prompt. Legacy WPF view-model/dialog code remains for existing regression fixtures.

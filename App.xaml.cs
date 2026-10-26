@@ -13,6 +13,7 @@ public partial class App : System.Windows.Application
     private NotifierService? _service;
     private DesktopBridge? _bridge;
     private MainWindow? _window;
+    private ManualEntryPromptWindow? _entryPrompt;
     private NotificationService? _notifications;
     private UpdateShutdownServer? _updateServer;
     private bool _exitingForUpdate;
@@ -41,6 +42,27 @@ public partial class App : System.Windows.Application
             _bridge = new DesktopBridge(api, _service);
             _window = new MainWindow(settings, _bridge);
             _window.Closing += (_, args) => { if (!_exitingForUpdate) { args.Cancel = true; _window.Hide(); } };
+            _window.IsVisibleChanged += (_, _) =>
+            {
+                if (!_window.IsVisible) _service.ResumeEntryPrompt(DateOnly.FromDateTime(DateTime.Today));
+            };
+            _service.EntryPromptRequested += workDate => Dispatcher.BeginInvoke(() =>
+            {
+                if (_entryPrompt is { IsVisible: true }) return;
+                _entryPrompt = new ManualEntryPromptWindow(_service, workDate);
+                _entryPrompt.ContinueRequested += date =>
+                {
+                    _service.DeferEntryPrompt(date);
+                    ShowMainWindow();
+                    _bridge.OpenDate(date);
+                };
+                _entryPrompt.Closed += (_, _) => _entryPrompt = null;
+                _entryPrompt.Show();
+            });
+            _service.EntryPromptDismissRequested += workDate => Dispatcher.BeginInvoke(() =>
+            {
+                if (_entryPrompt?.WorkDate == workDate) _entryPrompt.CloseFromApplication();
+            });
             _notifications.OpenRequested += (_, request) =>
             {
                 if (_bridge.IsPreparing) return;
@@ -85,6 +107,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _entryPrompt?.CloseFromApplication();
         _showMainRegistration?.Unregister(null);
         _showMain?.Dispose();
         _updateServer?.Stop();
