@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private Uri? _url;
     private int _generation;
     private bool _loading;
+    private bool _closed;
     private bool _allowNavigation;
     private readonly HashSet<string> _requests = [];
     private readonly System.Windows.Threading.DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -25,7 +26,7 @@ public partial class MainWindow : Window
         InitializeComponent(); _settings = settings; _bridge = bridge; _userDataFolder = userDataFolder;
         bridge.Event += SendEvent;
         Loaded += async (_, _) => { _statusTimer.Start(); if (_browser is null) await LoadAsync(); };
-        Closed += (_, _) => { _loadTimeout.Stop(); _statusTimer.Stop(); bridge.Event -= SendEvent; _browser?.Dispose(); };
+        Closed += (_, _) => { _closed = true; _generation++; _loadTimeout.Stop(); _statusTimer.Stop(); bridge.Event -= SendEvent; _browser?.Dispose(); };
         _statusTimer.Tick += (_, _) => bridge.PublishStatus();
         _loadTimeout.Tick += (_, _) => { _loadTimeout.Stop(); ShowRecovery("The website did not start Desktop Notifier. Ensure the hosted /desktop-notifier page is deployed, then retry. Reminders continue in the background."); };
     }
@@ -51,7 +52,9 @@ public partial class MainWindow : Window
             _browser = new WebView2 { Visibility = Visibility.Hidden }; BrowserHost.Children.Add(_browser);
             var profile = _userDataFolder ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Parallel Systems", "Desktop Notifier", "WebView2");
             var environment = await CoreWebView2Environment.CreateAsync(null, profile);
+            if (_closed) return;
             await _browser.EnsureCoreWebView2Async(environment);
+            if (_closed) return;
             var core = _browser.CoreWebView2;
             core.Settings.AreHostObjectsAllowed = false;
             core.Settings.AreDefaultContextMenusEnabled = false;

@@ -20,12 +20,14 @@ public static class DesktopPagePolicy
 }
 
 // All calls and events run on the application dispatcher. No generic URL/process/file operations.
-public sealed class DesktopBridge
+public sealed class DesktopBridge : IDisposable
 {
     public const int Version = 1;
     private static readonly HashSet<string> Catalogs = ["projects", "levels", "package-names", "tasks"];
     private readonly DesktopApiClient _api;
     private readonly NotifierService _service;
+    private readonly DateOnly? _promptDate;
+    public event Action<DateOnly>? ContinuePromptRequested;
     private TaskCompletionSource<bool>? _freeze;
     private string? _freezeId;
     private bool _preparing;
@@ -36,11 +38,13 @@ public sealed class DesktopBridge
     public bool HasPendingEdits { get; private set; }
     public bool IsPreparing => _preparing || _service.IsQuiescing;
     public event Action<string, object?>? Event;
-    public DesktopBridge(DesktopApiClient api, NotifierService service)
+    public DesktopBridge(DesktopApiClient api, NotifierService service, DateOnly? promptDate = null)
     {
-        _api = api; _service = service;
-        service.Changed += (_, _) => { if (_ready) Event?.Invoke("status", service.Snapshot()); };
+        _api = api; _service = service; _promptDate = promptDate;
+        service.Changed += ServiceChanged;
     }
+    private void ServiceChanged(object? sender, EventArgs args) => PublishStatus();
+    public void Dispose() { PageUnloaded(); _service.Changed -= ServiceChanged; }
     public void PageUnloaded()
     {
         _ready = false;
@@ -110,9 +114,28 @@ public sealed class DesktopBridge
                 return new { bridgeVersion = Version, capabilities = new[] { "dailyWork", "profile", "catalogs", "reminders", "updates", "dashboard" },
                     applicationVersion = typeof(DesktopBridge).Assembly.GetName().Version!.ToString(3),
                     requiredHours = _service.Settings.RequiredHoursPerDay, today = DateOnly.FromDateTime(DateTime.Today),
-                    workDate = _pendingDate ?? DateOnly.FromDateTime(DateTime.Today), state = _service.Snapshot() };
+                    mode = _promptDate.HasValue ? "manualEntryPrompt" : "timesheet",
+                    workDate = _promptDate ?? _pendingDate ?? DateOnly.FromDateTime(DateTime.Today), state = _service.Snapshot() };
             }
             if (!_hasPage) throw new BridgeException("notInitialized", "Initialize the notifier first.");
+            if (_promptDate is { } promptDate)
+            {
+                switch (operation)
+                {
+                    case "ready":
+                        if (!payload.TryGetProperty("mode", out var mode) || mode.GetString() != "manualEntryPrompt")
+                            throw new BridgeException("incompatible", "Deploy the website with manual entry prompt support, then retry.");
+                        _ready = true;
+                        return null;
+                    case "promptData": return await _service.GetManualEntryPromptDataAsync(promptDate);
+                    case "submitPrompt":
+                        var sessions = payload.GetProperty("sessions").Deserialize<List<ManualEntryPromptSession>>(AppSettings.JsonOptions)
+                            ?? throw new ArgumentException("Sessions are required.");
+                        return await _service.SubmitPromptSessionsAsync(promptDate, sessions);
+                    case "continuePrompt": ContinuePromptRequested?.Invoke(promptDate); return null;
+                    default: throw new BridgeException("unknownOperation", "This operation is not available in the reminder.");
+                }
+            }
             switch (operation)
             {
                 case "dashboardRequest":
@@ -160,7 +183,9 @@ public sealed class DesktopBridge
                     return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name, projectId, levelId);
                 case "saveSchedule":
                     _service.SaveSchedule(TimeOnly.ParseExact(Text(payload, "morning"), "HH:mm", CultureInfo.InvariantCulture),
-                        TimeOnly.ParseExact(Text(payload, "evening"), "HH:mm", CultureInfo.InvariantCulture));
+                        TimeOnly.ParseExact(Text(payload, "evening"), "HH:mm", CultureInfo.InvariantCulture),
+                        payload.TryGetProperty("adminDisableInAndOutNotifications", out var disableDaily)
+                            ? disableDaily.GetBoolean() : null);
                     return _service.Snapshot();
                 case "dismissAlert": _service.DismissAlert(); return _service.Snapshot();
                 case "checkUpdates": ParallelSystems.ProductSupport.ProductLifecycle.CheckForUpdates(); return null;

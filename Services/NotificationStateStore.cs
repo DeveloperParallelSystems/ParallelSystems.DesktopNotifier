@@ -6,17 +6,37 @@ namespace ParallelSystems.DesktopNotifier.Services;
 public sealed class NotificationStateStore
 {
     private readonly string _path;
-    public NotificationStateStore(string? path = null) => _path = path ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Parallel Systems", "Timesheet Notifier", "notification-state.json");
+    private readonly string? _legacyPath;
+
+    public NotificationStateStore(string? path = null)
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        _path = path ?? Path.Combine(localAppData,
+            "Parallel Systems", "Desktop Notifier", "notification-state.json");
+        _legacyPath = path is null
+            ? Path.Combine(localAppData, "Parallel Systems", "Timesheet Notifier", "notification-state.json")
+            : null;
+    }
 
     public NotificationProcessingState Read()
     {
         try
         {
-            return File.Exists(_path)
+            var readPath = _path;
+            if (!File.Exists(readPath) && _legacyPath is not null && File.Exists(_legacyPath))
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+                    File.Copy(_legacyPath, _path, false);
+                }
+                catch (IOException) { readPath = _legacyPath; }
+                catch (UnauthorizedAccessException) { readPath = _legacyPath; }
+            }
+
+            return File.Exists(readPath)
                 ? JsonSerializer.Deserialize<NotificationProcessingState>(
-                    File.ReadAllText(_path), AppSettings.JsonOptions) ?? new NotificationProcessingState()
+                    File.ReadAllText(readPath), AppSettings.JsonOptions) ?? new NotificationProcessingState()
                 : new NotificationProcessingState();
         }
         catch (IOException) { return new NotificationProcessingState(); }

@@ -49,7 +49,7 @@ public partial class App : System.Windows.Application
             _service.EntryPromptRequested += workDate => Dispatcher.BeginInvoke(() =>
             {
                 if (_entryPrompt is { IsVisible: true }) return;
-                _entryPrompt = new ManualEntryPromptWindow(_service, workDate);
+                _entryPrompt = new ManualEntryPromptWindow(_service, api, workDate);
                 _entryPrompt.ContinueRequested += date =>
                 {
                     _service.DeferEntryPrompt(date);
@@ -81,7 +81,7 @@ public partial class App : System.Windows.Application
                 (_, _) => Dispatcher.BeginInvoke(ShowMainWindow), null, Timeout.Infinite, false);
             if (e.Args.Contains("--show-main")) ShowMainWindow();
             _updateServer = new UpdateShutdownServer("ParallelSystems.DesktopNotifier",
-                async token => await await Dispatcher.InvokeAsync(() => _bridge.PrepareForUpdateAsync(token), System.Windows.Threading.DispatcherPriority.Normal, token),
+                async token => await await Dispatcher.InvokeAsync(() => _entryPrompt is not null ? Task.FromResult("busy") : _bridge.PrepareForUpdateAsync(token), System.Windows.Threading.DispatcherPriority.Normal, token),
                 async () => await await Dispatcher.InvokeAsync(async () => {
                     await _service.CompleteUpdateAsync();
                     _exitingForUpdate = true;

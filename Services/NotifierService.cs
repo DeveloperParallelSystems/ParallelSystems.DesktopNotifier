@@ -45,6 +45,7 @@ public sealed class NotifierService : IDisposable
     public object Snapshot() => new {
         status = Status, today = DateOnly.FromDateTime(DateTime.Today), alert = new { visible = Alert.IsVisible, message = Alert.Message },
         morning = Settings.MorningNotificationAt.ToString("HH:mm"), evening = Settings.AfternoonNotificationAt.ToString("HH:mm"),
+        adminDisableInAndOutNotifications = Settings.AdminDisableInAndOutNotifications,
         updateLabel = ParallelSystems.ProductSupport.ProductLifecycle.UpdateLabel("desktop-notifier", null),
         updateAction = ParallelSystems.ProductSupport.ProductLifecycle.UpdateActionLabel("desktop-notifier", null)
     };
@@ -143,10 +144,10 @@ public sealed class NotifierService : IDisposable
         RecordSubmission(workDate, true);
         return response;
     }
-    public void SaveSchedule(TimeOnly morning, TimeOnly evening)
+    public void SaveSchedule(TimeOnly morning, TimeOnly evening, bool? adminDisableInAndOutNotifications = null)
     {
         if (morning.Hour >= 12 || evening.Hour < 12) throw new ArgumentException("Morning must be before 12:00; evening must be 12:00 or later.");
-        Settings.SaveNotificationSchedule(morning, evening);
+        Settings.SaveNotificationSchedule(morning, evening, adminDisableInAndOutNotifications);
         Changed?.Invoke(this, EventArgs.Empty);
     }
     public async Task CheckAsync(DateTime now)
@@ -154,8 +155,9 @@ public sealed class NotifierService : IDisposable
         using var lease = EnterOperation();
         var date = DateOnly.FromDateTime(now);
         var time = TimeOnly.FromDateTime(now);
+        var suppressDailyNotifications = await _api.ShouldSuppressDailyNotificationsAsync(Settings);
         // The evening reminder is local and must still run when the API is unavailable.
-        if (_state.AfternoonProcessedDate != date && time >= Settings.AfternoonNotificationAt)
+        if (!suppressDailyNotifications && _state.AfternoonProcessedDate != date && time >= Settings.AfternoonNotificationAt)
         {
             _state.AfternoonProcessedDate = date; _store.Write(_state);
             NotificationRequested?.Invoke(this, new() {
@@ -165,7 +167,7 @@ public sealed class NotifierService : IDisposable
         }
         var device = await GetDeviceAsync();
         await Alert.RefreshAsync();
-        if (_state.MorningProcessedDate != date && time >= Settings.MorningNotificationAt)
+        if (!suppressDailyNotifications && _state.MorningProcessedDate != date && time >= Settings.MorningNotificationAt)
         {
             var status = await _api.GetStatusAsync(device.Id, date.AddDays(-1));
             _state.MorningProcessedDate = date; _store.Write(_state);

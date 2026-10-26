@@ -27,6 +27,7 @@ public sealed class AppSettings
     public double RequiredHoursPerDay { get; set; } = 8;
     public string MorningNotificationTime { get; set; } = "08:00";
     public string AfternoonNotificationTime { get; set; } = "16:00";
+    public bool AdminDisableInAndOutNotifications { get; set; }
 
     [JsonIgnore]
     public TimeOnly MorningNotificationAt { get; private set; } = new(8, 0);
@@ -59,6 +60,8 @@ public sealed class AppSettings
 
             if (!string.IsNullOrWhiteSpace(userSchedule.AfternoonNotificationTime))
                 value.AfternoonNotificationTime = userSchedule.AfternoonNotificationTime;
+            if (userSchedule.AdminDisableInAndOutNotifications is { } disabled)
+                value.AdminDisableInAndOutNotifications = disabled;
         }
 
         value.ApiBaseUrl = CommonServerSettings.Resolve(CommonServerSettings.Load(value.ApiBaseUrl));
@@ -70,19 +73,22 @@ public sealed class AppSettings
         return value;
     }
 
-    public void SaveNotificationSchedule(TimeOnly morning, TimeOnly evening)
+    public void SaveNotificationSchedule(TimeOnly morning, TimeOnly evening, bool? adminDisableInAndOutNotifications = null)
     {
         MorningNotificationAt = morning;
         AfternoonNotificationAt = evening;
         MorningNotificationTime = morning.ToString("HH:mm", CultureInfo.InvariantCulture);
         AfternoonNotificationTime = evening.ToString("HH:mm", CultureInfo.InvariantCulture);
+        if (adminDisableInAndOutNotifications is { } disabled)
+            AdminDisableInAndOutNotifications = disabled;
 
         var path = UserNotificationSchedulePath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, JsonSerializer.Serialize(new NotificationScheduleSettings
         {
             MorningNotificationTime = MorningNotificationTime,
-            AfternoonNotificationTime = AfternoonNotificationTime
+            AfternoonNotificationTime = AfternoonNotificationTime,
+            AdminDisableInAndOutNotifications = AdminDisableInAndOutNotifications
         }, JsonOptions));
     }
 
@@ -90,9 +96,21 @@ public sealed class AppSettings
     {
         try
         {
-            return File.Exists(UserNotificationSchedulePath)
+            var path = UserNotificationSchedulePath;
+            if (!File.Exists(path) && File.Exists(LegacyUserNotificationSchedulePath))
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.Copy(LegacyUserNotificationSchedulePath, path, false);
+                }
+                catch (IOException) { path = LegacyUserNotificationSchedulePath; }
+                catch (UnauthorizedAccessException) { path = LegacyUserNotificationSchedulePath; }
+            }
+
+            return File.Exists(path)
                 ? JsonSerializer.Deserialize<NotificationScheduleSettings>(
-                    File.ReadAllText(UserNotificationSchedulePath), JsonOptions)
+                    File.ReadAllText(path), JsonOptions)
                 : null;
         }
         catch (IOException) { return null; }
@@ -112,12 +130,17 @@ public sealed class AppSettings
 
     private static string UserNotificationSchedulePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Parallel Systems", "Desktop Notifier", "notification-settings.json");
+
+    private static string LegacyUserNotificationSchedulePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "Parallel Systems", "Timesheet Notifier", "notification-settings.json");
 
     private sealed class NotificationScheduleSettings
     {
         public string? MorningNotificationTime { get; set; }
         public string? AfternoonNotificationTime { get; set; }
+        public bool? AdminDisableInAndOutNotifications { get; set; }
     }
 
     internal static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

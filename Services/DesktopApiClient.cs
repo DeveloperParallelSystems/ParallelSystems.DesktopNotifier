@@ -19,6 +19,21 @@ public sealed class DesktopApiClient : IDisposable
     }
     public void Dispose() => _client.Dispose();
 
+    public async Task<bool> ShouldSuppressDailyNotificationsAsync(AppSettings settings)
+    {
+        if (!settings.AdminDisableInAndOutNotifications) return false;
+        try
+        {
+            // Never trust a local preference or a previously cached administrator role.
+            return (await GetPersonalInformationAsync(Environment.MachineName)).IsAdministrator;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            // Keep reminders enabled when current administrator access cannot be verified.
+            return false;
+        }
+    }
+
     public async Task<object> DashboardRequestAsync(string method, string path, JsonElement body)
     {
         if (!DesktopDashboardPolicy.Allows(method, path))

@@ -186,6 +186,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_device is null) return;
         var processingDate = DateOnly.FromDateTime(now);
         var currentTime = TimeOnly.FromDateTime(now);
+        if (await _api.ShouldSuppressDailyNotificationsAsync(_settings)) return;
 
         if (_notificationState.MorningProcessedDate != processingDate &&
             currentTime >= _settings.MorningNotificationAt)
