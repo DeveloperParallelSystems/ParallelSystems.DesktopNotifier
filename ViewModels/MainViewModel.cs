@@ -80,7 +80,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => SelectedDate?.ToDateTime(TimeOnly.MinValue);
         set => SelectedDate = value.HasValue ? DateOnly.FromDateTime(value.Value) : null;
     }
-    public DateTime LatestWorkDate => DateTime.Today;
     public string SelectedDateStatus { get => _selectedDateStatus; private set => Set(ref _selectedDateStatus, value); }
     public bool SelectedDateHasSessions { get => _selectedDateHasSessions; private set => Set(ref _selectedDateHasSessions, value); }
     public int ExistingDatesVersion { get => _existingDatesVersion; private set => Set(ref _existingDatesVersion, value); }
@@ -186,6 +185,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_device is null) return;
         var processingDate = DateOnly.FromDateTime(now);
         var currentTime = TimeOnly.FromDateTime(now);
+        if (await _api.ShouldSuppressDailyNotificationsAsync(_settings)) return;
 
         if (_notificationState.MorningProcessedDate != processingDate &&
             currentTime >= _settings.MorningNotificationAt)
@@ -338,11 +338,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!date.HasValue || _device is null)
         {
             SelectedDateStatus = "Select a date to review its work sessions.";
-            return;
-        }
-        if (date.Value > DateOnly.FromDateTime(DateTime.Today))
-        {
-            SelectedDateStatus = "Choose today or an earlier date.";
             return;
         }
         BeginDataLoad();

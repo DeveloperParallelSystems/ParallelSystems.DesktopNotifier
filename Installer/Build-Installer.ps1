@@ -24,7 +24,24 @@ if (-not $isccPath) {
     throw 'Inno Setup 6 is required. Install it, then run this script again.'
 }
 
+# Bundle Microsoft's signed Evergreen bootstrapper; the runtime itself downloads on first install.
+$dependencyDirectory = Join-Path $projectDirectory 'artifacts\dependencies'
+New-Item -ItemType Directory -Path $dependencyDirectory -Force | Out-Null
+$webViewBootstrapper = Join-Path $dependencyDirectory 'MicrosoftEdgeWebview2Setup.exe'
+if (-not (Test-Path -LiteralPath $webViewBootstrapper)) {
+    Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $webViewBootstrapper
+}
+$signature = Get-AuthenticodeSignature -LiteralPath $webViewBootstrapper
+if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+    throw 'The WebView2 bootstrapper must have a valid Microsoft Authenticode signature.'
+}
+
 if (Test-Path -LiteralPath $publishDirectory) {
+    $resolvedPublish = [IO.Path]::GetFullPath($publishDirectory)
+    $expectedPublish = [IO.Path]::GetFullPath((Join-Path $projectDirectory 'artifacts\publish'))
+    if ($resolvedPublish -ne $expectedPublish -or (Get-Item -LiteralPath $publishDirectory).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+        throw 'Refusing to clean an unexpected publish directory.'
+    }
     Remove-Item -LiteralPath $publishDirectory -Recurse -Force
 }
 New-Item -ItemType Directory -Path $publishDirectory -Force | Out-Null

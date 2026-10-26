@@ -19,6 +19,35 @@ public sealed class DesktopApiClient : IDisposable
     }
     public void Dispose() => _client.Dispose();
 
+    public async Task<bool> ShouldSuppressDailyNotificationsAsync(AppSettings settings)
+    {
+        if (!settings.AdminDisableInAndOutNotifications) return false;
+        try
+        {
+            // Never trust a local preference or a previously cached administrator role.
+            return (await GetPersonalInformationAsync(Environment.MachineName)).IsAdministrator;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        {
+            // Keep reminders enabled when current administrator access cannot be verified.
+            return false;
+        }
+    }
+
+    public async Task<object> DashboardRequestAsync(string method, string path, JsonElement body)
+    {
+        if (!DesktopDashboardPolicy.Allows(method, path))
+            throw new BridgeException("accessDenied", "This dashboard operation is not supported.");
+        using var request = new HttpRequestMessage(new HttpMethod(method), "api" + path);
+        request.Headers.Add("X-Parallel-Dashboard", "1");
+        if (body.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+            request.Content = JsonContent.Create(body);
+        using var response = await _client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+        var result = string.IsNullOrWhiteSpace(json) ? (JsonElement?)null : JsonSerializer.Deserialize<JsonElement>(json);
+        return new { status = (int)response.StatusCode, body = result };
+    }
+
     public Task<List<CatalogItem>> GetCatalogAsync(string catalog) =>
         SendAsync<List<CatalogItem>>(HttpMethod.Get, $"api/{catalog}");
 
@@ -34,6 +63,8 @@ public sealed class DesktopApiClient : IDisposable
     public Task<List<LevelOptionModel>> GetLevelsAsync() => SendAsync<List<LevelOptionModel>>(HttpMethod.Get, "api/v2/desktop/daily-work/levels");
     public Task<EmployeePersonalInformation> GetPersonalInformationAsync(string machineName) =>
         SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/v2/desktop/daily-work/personal-information?machineName={Uri.EscapeDataString(machineName)}");
+    public Task<TimesheetDesktopSettings> GetTimesheetDesktopSettingsAsync() =>
+        SendAsync<TimesheetDesktopSettings>(HttpMethod.Get, "api/v2/desktop/daily-work/settings");
 
     public async Task<EmployeePersonalInformation> SavePersonalInformationAsync(string machineName, EmployeePersonalInformation information)
     {
