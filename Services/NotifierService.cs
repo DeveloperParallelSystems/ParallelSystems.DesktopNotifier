@@ -16,6 +16,7 @@ public sealed class NotifierService : IDisposable
     private DateOnly? _entryPromptRaisedDate;
     private DateOnly? _entryPromptDeferredDate;
     private DateOnly? _entryPromptSuppressedDate;
+    private TimesheetDesktopSettings _timesheetDesktopSettings = new();
     public AppSettings Settings { get; }
     public MissingTimesheetAlertViewModel Alert { get; }
     public string Status { get; private set; } = "Starting…";
@@ -184,7 +185,19 @@ public sealed class NotifierService : IDisposable
                 Message = "No timesheet exists for yesterday. Click to add one."
             });
         }
-        if (time >= new TimeOnly(1, 0))
+        _timesheetDesktopSettings = await _api.GetTimesheetDesktopSettingsAsync();
+        if (!_timesheetDesktopSettings.PersistentPromptEntryEnabled)
+        {
+            _entryPromptSuppressedDate = date;
+            EntryPromptDismissRequested?.Invoke(date);
+        }
+        else if (_entryPromptSuppressedDate == date)
+        {
+            _entryPromptSuppressedDate = null;
+        }
+
+        if (_timesheetDesktopSettings.PersistentPromptEntryEnabled &&
+            time >= _timesheetDesktopSettings.PromptEntryStartTime)
         {
             var information = await _api.GetPersonalInformationAsync(Environment.MachineName);
             if (information.TimesheetNotificationsEnabled != true)
@@ -219,9 +232,9 @@ public sealed class NotifierService : IDisposable
             {
                 try { await CheckAsync(DateTime.Now); }
                 catch (OperationCanceledException) when (_stop.IsCancellationRequested) { break; }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    Status = "Notification check failed. Retrying automatically.";
+                    Status = $"Notification check failed: {ex.Message} Retrying automatically.";
                     Changed?.Invoke(this, EventArgs.Empty);
                 }
             }
@@ -240,9 +253,10 @@ public sealed class NotifierService : IDisposable
             var remaining = next > now ? next - now : processed == date ? next.AddDays(1) - now : TimeSpan.FromMinutes(1);
             if (remaining < delay) delay = remaining;
         }
-        if (_entryPromptRaisedDate != date && _entryPromptDeferredDate != date && _entryPromptSuppressedDate != date)
+        if (_timesheetDesktopSettings.PersistentPromptEntryEnabled &&
+            _entryPromptRaisedDate != date && _entryPromptDeferredDate != date && _entryPromptSuppressedDate != date)
         {
-            var prompt = now.Date.Add(new TimeOnly(13, 0).ToTimeSpan());
+            var prompt = now.Date.Add(_timesheetDesktopSettings.PromptEntryStartTime.ToTimeSpan());
             var remaining = prompt > now ? prompt - now : TimeSpan.FromMinutes(1);
             if (remaining < delay) delay = remaining;
         }

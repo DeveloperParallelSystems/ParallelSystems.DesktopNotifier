@@ -63,6 +63,8 @@ public sealed class DesktopApiClient : IDisposable
     public Task<List<LevelOptionModel>> GetLevelsAsync() => SendAsync<List<LevelOptionModel>>(HttpMethod.Get, "api/v2/desktop/daily-work/levels");
     public Task<EmployeePersonalInformation> GetPersonalInformationAsync(string machineName) =>
         SendAsync<EmployeePersonalInformation>(HttpMethod.Get, $"api/v2/desktop/daily-work/personal-information?machineName={Uri.EscapeDataString(machineName)}");
+    public Task<TimesheetDesktopSettings> GetTimesheetDesktopSettingsAsync() =>
+        SendAsync<TimesheetDesktopSettings>(HttpMethod.Get, "api/v2/desktop/daily-work/settings");
 
     public async Task<EmployeePersonalInformation> SavePersonalInformationAsync(string machineName, EmployeePersonalInformation information)
     {

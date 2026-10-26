@@ -14,6 +14,7 @@ Add changes here as they are completed. Move them into a dated version section w
 
 ### Added
 
+- Server-controlled enablement and start hour for the persistent timesheet entry prompt.
 - A loading indicator while timesheet data is being retrieved.
 - A persistent 1 p.m. work-session prompt prefilled from recent entries.
 - A notification settings dialog for changing the morning and evening reminder times.

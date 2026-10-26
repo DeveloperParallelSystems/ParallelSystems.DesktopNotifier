@@ -10,6 +10,12 @@ public sealed class DailyStatusModel
     public bool HasDailySession { get; set; }
     public long AdditionalSeconds { get; set; }
 }
+public sealed class TimesheetDesktopSettings
+{
+    public bool PersistentPromptEntryEnabled { get; set; } = true;
+    public int PersistentPromptEntryTimeStart { get; set; } = 13;
+    public TimeOnly PromptEntryStartTime => new(PersistentPromptEntryTimeStart, 0);
+}
 public sealed class ProjectModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class LevelOptionModel { public Guid Id { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
 public sealed class PackageNameOptionModel { public Guid Id { get; set; } public Guid? LevelId { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
