@@ -362,7 +362,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     TaskCategory = existing.TaskCategory,
                     ClientName = existing.ClientName,
                     Level = existing.Level,
-                    PackageName = existing.PackageName,
+                    PackageName = existing.PackageName, PackageNameId = existing.PackageNameId,
                     Notes = existing.Notes
                 };
                 AttachManualSession(row);
@@ -458,6 +458,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                             string.Equals(client.Name, x.ClientName.Trim(), StringComparison.OrdinalIgnoreCase))?.Id,
                         ClientName = x.ClientName.Trim(),
                         Level = string.IsNullOrWhiteSpace(x.Level) ? null : x.Level.Trim(),
+                        PackageNameId = x.PackageNameId,
                         PackageName = string.IsNullOrWhiteSpace(x.PackageName) ? null : x.PackageName.Trim(),
                         StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
                         EndedAtUtc = new DateTimeOffset(end.ToUniversalTime(), TimeSpan.Zero),
@@ -507,13 +508,28 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         row.PropertyChanged += (_, args) =>
         {
             if (updating) return;
-            if (args.PropertyName == nameof(ManualSessionModel.ProjectName))
+            if (args.PropertyName == nameof(ManualSessionModel.ClientName))
+            {
+                updating = true;
+                row.ProjectName = ""; row.Level = null; row.PackageName = null; row.PackageNameId = null;
+                lastProject = ""; lastLevel = null;
+                updating = false;
+                UpdateManualSessionOptions(row);
+            }
+            else if (args.PropertyName == nameof(ManualSessionModel.PackageName))
+            {
+                var project = Projects.FirstOrDefault(p => p.Name == row.ProjectName);
+                var level = Levels.FirstOrDefault(l => l.ProjectId == project?.Id && l.Name == row.Level);
+                row.PackageNameId = PackageNames.FirstOrDefault(p => p.LevelId == level?.Id && p.Name == row.PackageName)?.Id;
+            }
+            else if (args.PropertyName == nameof(ManualSessionModel.ProjectName))
             {
                 if (!string.Equals(lastProject, row.ProjectName, StringComparison.Ordinal))
                 {
                     updating = true;
                     row.Level = null;
                     row.PackageName = null;
+                    row.PackageNameId = null;
                     updating = false;
                     lastProject = row.ProjectName;
                     lastLevel = null;
@@ -526,6 +542,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     updating = true;
                     row.PackageName = null;
+                    row.PackageNameId = null;
                     updating = false;
                     lastLevel = row.Level;
                 }
@@ -537,6 +554,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void UpdateManualSessionOptions(ManualSessionModel row)
     {
+        var clientId = Clients.FirstOrDefault(c => c.Name == row.ClientName)?.Id;
+        row.AvailableProjects.Clear();
+        foreach (var project in Projects.Where(p => clientId.HasValue && p.ClientIds.Contains(clientId.Value))) row.AvailableProjects.Add(project.Name);
         var projectId = Projects.FirstOrDefault(project =>
             string.Equals(project.Name, row.ProjectName.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
         var levels = projectId.HasValue

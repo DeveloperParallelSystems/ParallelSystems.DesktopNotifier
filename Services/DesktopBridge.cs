@@ -197,8 +197,10 @@ public sealed class DesktopBridge : IDisposable
                     if (name.Length is 0 or > 500) throw new ArgumentException("Enter a name of up to 500 characters.");
                     var projectId = OptionalId(payload, "projectId"); var levelId = OptionalId(payload, "levelId");
                     if (catalog is "levels" or "package-names" && projectId is null) throw new ArgumentException("Select a project.");
-                    if (catalog == "package-names" && levelId is null) throw new ArgumentException("Select a level.");
-                    return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name, projectId, levelId);
+                    var levelName = payload.TryGetProperty("levelName", out var levelText) ? levelText.GetString()?.Trim() : null;
+                    if (catalog == "package-names" && levelId is null && string.IsNullOrWhiteSpace(levelName)) throw new ArgumentException("Choose or enter a level.");
+                    var clientIds = payload.TryGetProperty("clientIds", out var clientList) ? clientList.Deserialize<List<Guid>>(AppSettings.JsonOptions) : null;
+                    return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name, projectId, levelId, levelName, clientIds);
                 case "saveSchedule":
                     _service.SaveSchedule(TimeOnly.ParseExact(Text(payload, "morning"), "HH:mm", CultureInfo.InvariantCulture),
                         TimeOnly.ParseExact(Text(payload, "evening"), "HH:mm", CultureInfo.InvariantCulture),
@@ -231,14 +233,16 @@ public sealed class DesktopBridge : IDisposable
             IncludeTrackedSessions = false, DeletedManualSessionIds = deleted };
         foreach (var row in rows)
         {
-            var project = projects.FirstOrDefault(p => p.Id == row.ProjectId) ?? throw new ArgumentException("Select an existing project for every session.");
-            var client = clients.FirstOrDefault(c => c.Id == row.ClientId) ?? throw new ArgumentException("Select an existing client for every session.");
+            var project = projects.FirstOrDefault(p => p.Id == row.ProjectId);
+            if (project is null && !row.Id.HasValue) throw new ArgumentException("Select an existing project for every session.");
+            var client = clients.FirstOrDefault(c => c.Id == row.ClientId);
+            if (client is null && !row.Id.HasValue) throw new ArgumentException("Select an existing client for every session.");
             if (row.EngagedSeconds <= 0 || row.EngagedSeconds > 86400) throw new ArgumentException("Hours must be greater than zero and no more than 24.");
             if (string.IsNullOrWhiteSpace(row.TaskCategory)) throw new ArgumentException("Task category is required for every session.");
             if (row.PackageName?.Trim().Length > 300) throw new ArgumentException("Package name cannot exceed 300 characters.");
             var start = DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(9, 0)), DateTimeKind.Local);
-            request.ManualSessions.Add(new() { Id = row.Id, ProjectId = project.Id, ProjectName = project.Name,
-                ClientId = client.Id, ClientName = client.Name, Level = row.Level?.Trim(), PackageName = row.PackageName?.Trim(),
+            request.ManualSessions.Add(new() { Id = row.Id, ProjectId = row.ProjectId, ProjectName = project?.Name ?? "",
+                ClientId = row.ClientId, ClientName = client?.Name ?? "", Level = row.Level?.Trim(), PackageNameId = row.PackageNameId, PackageName = row.PackageName?.Trim(),
                 TaskCategory = row.TaskCategory.Trim(), Notes = row.Notes,
                 StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
                 EndedAtUtc = new DateTimeOffset(start.AddSeconds(row.EngagedSeconds).ToUniversalTime(), TimeSpan.Zero) });
@@ -264,10 +268,11 @@ public sealed class DesktopBridge : IDisposable
     {
         public Guid? Id { get; set; }
         public Guid ProjectId { get; set; }
-        public Guid ClientId { get; set; }
+        public Guid? ClientId { get; set; }
         public int EngagedSeconds { get; set; }
         public string TaskCategory { get; set; } = "";
         public string? Level { get; set; }
+        public Guid? PackageNameId { get; set; }
         public string? PackageName { get; set; }
         public string? Notes { get; set; }
     }

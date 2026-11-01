@@ -52,11 +52,14 @@ public sealed class DesktopApiClient : IDisposable
         SendAsync<List<CatalogItem>>(HttpMethod.Get, $"api/{catalog}");
 
     public async Task<CatalogItem> SaveCatalogItemAsync(string catalog, Guid? id, string name,
-        Guid? projectId = null, Guid? levelId = null)
+        Guid? projectId = null, Guid? levelId = null, string? levelName = null, List<Guid>? clientIds = null)
     {
+        var payload = new Dictionary<string, object?> { ["name"] = name, ["projectId"] = projectId,
+            ["levelId"] = levelId, ["levelName"] = levelName };
+        if (catalog == "projects" && clientIds is not null) payload["clientIds"] = clientIds;
         using var response = id.HasValue
-            ? await _client.PutAsJsonAsync($"api/{catalog}/{id}", new { name, projectId, levelId })
-            : await _client.PostAsJsonAsync($"api/{catalog}", new { name, projectId, levelId });
+            ? await _client.PutAsJsonAsync($"api/{catalog}/{id}", payload)
+            : await _client.PostAsJsonAsync($"api/{catalog}", payload);
         return await ReadAsync<CatalogItem>(response);
     }
 

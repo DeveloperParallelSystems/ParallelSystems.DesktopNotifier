@@ -16,7 +16,7 @@ public sealed class TimesheetDesktopSettings
     public int PersistentPromptEntryTimeStart { get; set; } = 13;
     public TimeOnly PromptEntryStartTime => new(PersistentPromptEntryTimeStart, 0);
 }
-public sealed class ProjectModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
+public sealed class ProjectModel { public List<Guid> ClientIds { get; set; } = []; public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class LevelOptionModel { public Guid Id { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
 public sealed class PackageNameOptionModel { public Guid Id { get; set; } public Guid? LevelId { get; set; } public Guid? ProjectId { get; set; } public string Name { get; set; } = ""; }
 public sealed class ClientModel { public Guid Id { get; set; } public string Name { get; set; } = ""; }
@@ -41,6 +41,8 @@ public sealed class ManualSessionModel : INotifyPropertyChanged
     private string _taskCategory = "";
     private string _clientName = "";
     private string? _level;
+    public Guid? PackageNameId { get; set; }
+    public ObservableCollection<string> AvailableProjects { get; } = [];
     private string? _packageName;
     private string? _notes;
     public ObservableCollection<string> AvailableLevels { get; } = [];
@@ -65,8 +67,8 @@ public sealed class DailySubmitRequest
     public List<ManualSubmitModel> ManualSessions { get; set; } = [];
     public List<Guid> DeletedManualSessionIds { get; set; } = [];
 }
-public sealed class ManualSubmitModel { public Guid? Id { get; set; } public Guid? ProjectId { get; set; } public string ProjectName { get; set; } = ""; public Guid? ClientId { get; set; } public string ClientName { get; set; } = ""; public string? Level { get; set; } public string? PackageName { get; set; } public DateTimeOffset StartedAtUtc { get; set; } public DateTimeOffset EndedAtUtc { get; set; } public string TaskCategory { get; set; } = ""; public string? Notes { get; set; } }
-public sealed class ExistingManualSessionModel { public Guid Id { get; set; } public Guid ProjectId { get; set; } public string ProjectName { get; set; } = ""; public Guid? ClientId { get; set; } public string ClientName { get; set; } = ""; public string? Level { get; set; } public string? PackageName { get; set; } public int EngagedSeconds { get; set; } public string TaskCategory { get; set; } = ""; public string? Notes { get; set; } }
+public sealed class ManualSubmitModel { public Guid? Id { get; set; } public Guid? ProjectId { get; set; } public string ProjectName { get; set; } = ""; public Guid? ClientId { get; set; } public string ClientName { get; set; } = ""; public string? Level { get; set; } public Guid? PackageNameId { get; set; } public string? PackageName { get; set; } public DateTimeOffset StartedAtUtc { get; set; } public DateTimeOffset EndedAtUtc { get; set; } public string TaskCategory { get; set; } = ""; public string? Notes { get; set; } }
+public sealed class ExistingManualSessionModel { public Guid Id { get; set; } public Guid ProjectId { get; set; } public string ProjectName { get; set; } = ""; public Guid? ClientId { get; set; } public string ClientName { get; set; } = ""; public string? Level { get; set; } public Guid? PackageNameId { get; set; } public string? PackageName { get; set; } public int EngagedSeconds { get; set; } public string TaskCategory { get; set; } = ""; public string? Notes { get; set; } }
 public sealed class SubmitResponse { public int CreatedManualSessions { get; set; } public int UpdatedManualSessions { get; set; } public int DeletedManualSessions { get; set; } }
 
 public sealed class ManualEntryPromptData
@@ -85,6 +87,7 @@ public sealed class ManualEntryPromptSession : INotifyPropertyChanged
     private Guid? _clientId;
     private int _engagedSeconds = 3600;
     private string _level = "";
+    public Guid? PackageNameId { get; set; }
     private string _packageName = "";
     private string _taskCategory = "";
     private string _notes = "";

@@ -141,6 +141,7 @@ public sealed class NotifierService : IDisposable
                 ClientId = client.Id,
                 ClientName = client.Name,
                 Level = session.Level?.Trim(),
+                PackageNameId = session.PackageNameId,
                 PackageName = session.PackageName?.Trim(),
                 TaskCategory = session.TaskCategory.Trim(),
                 Notes = session.Notes?.Trim(),
