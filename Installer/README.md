@@ -21,3 +21,8 @@ Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then build the instal
 ```
 
 The setup executable is written to `artifacts\installer`.
+
+The installer seeds `%LOCALAPPDATA%\Parallel Systems\Shared\common.settings.json`
+with the production API host when no shared config exists. Existing shared
+settings are preserved. The packaged app leaves `ApiBaseUrl` unset so it uses
+the shared value; a nonempty per-user app setting remains an explicit override.

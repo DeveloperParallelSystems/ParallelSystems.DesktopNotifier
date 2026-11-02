@@ -27,6 +27,7 @@ AppMutex=Local\ParallelSystems.DesktopNotifier.SingleInstance
 
 [Files]
 Source: "..\artifacts\dependencies\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
+Source: "..\artifacts\installer\common.settings.json"; DestDir: "{localappdata}\Parallel Systems\Shared"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "..\Assets\logo-mark.ico"; DestDir: "{app}"; DestName: "Product.ico"; Flags: ignoreversion
 Source: "..\artifacts\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

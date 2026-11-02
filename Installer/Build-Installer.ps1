@@ -5,6 +5,7 @@ $projectFile = Join-Path $projectDirectory 'ParallelSystems.DesktopNotifier.cspr
 $installerScript = Join-Path $PSScriptRoot 'ParallelSystems.DesktopNotifier.iss'
 $publishDirectory = Join-Path $projectDirectory 'artifacts\publish'
 $installerDirectory = Join-Path $projectDirectory 'artifacts\installer'
+$sharedSettingsPath = Join-Path $installerDirectory 'common.settings.json'
 
 [xml]$project = Get-Content -Raw -LiteralPath $projectFile
 $version = [string]$project.Project.PropertyGroup.Version
@@ -57,6 +58,17 @@ New-Item -ItemType Directory -Path $installerDirectory -Force | Out-Null
     -p:DebugType=None `
     -p:DebugSymbols=false
 if ($LASTEXITCODE -ne 0) { throw "Desktop Notifier publish failed with exit code $LASTEXITCODE." }
+
+$notifierSettingsPath = Join-Path $publishDirectory 'notifier.settings.json'
+if (-not (Test-Path -LiteralPath $notifierSettingsPath -PathType Leaf)) {
+    throw 'Desktop Notifier publish did not produce notifier.settings.json.'
+}
+$notifierSettings = Get-Content -LiteralPath $notifierSettingsPath -Raw | ConvertFrom-Json
+$notifierSettings.ApiBaseUrl = ''
+$notifierSettings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $notifierSettingsPath
+@{ ApiBaseUrl = 'app.parallelsystems.com.au' } |
+    ConvertTo-Json |
+    Set-Content -LiteralPath $sharedSettingsPath
 
 & $isccPath $installerScript
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed with exit code $LASTEXITCODE." }
