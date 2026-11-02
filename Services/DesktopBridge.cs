@@ -146,6 +146,9 @@ public sealed class DesktopBridge : IDisposable
                             ?? throw new ArgumentException("Suggested sessions are required.");
                         ContinuePromptRequested?.Invoke(promptDate, suggestions);
                         return null;
+                    case "profile":
+                    case "saveCatalog":
+                        break; // Use the same permission checks as the main window.
                     default: throw new BridgeException("unknownOperation", "This operation is not available in the reminder.");
                 }
             }
@@ -198,7 +201,6 @@ public sealed class DesktopBridge : IDisposable
                     var projectId = OptionalId(payload, "projectId"); var levelId = OptionalId(payload, "levelId");
                     if (catalog is "levels" or "package-names" && projectId is null) throw new ArgumentException("Select a project.");
                     var levelName = payload.TryGetProperty("levelName", out var levelText) ? levelText.GetString()?.Trim() : null;
-                    if (catalog == "package-names" && levelId is null && string.IsNullOrWhiteSpace(levelName)) throw new ArgumentException("Choose or enter a level.");
                     var clientIds = payload.TryGetProperty("clientIds", out var clientList) ? clientList.Deserialize<List<Guid>>(AppSettings.JsonOptions) : null;
                     return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name, projectId, levelId, levelName, clientIds);
                 case "saveSchedule":
