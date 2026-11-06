@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text.Json;
 using ParallelSystems.DesktopNotifier.Models;
@@ -24,8 +23,8 @@ public sealed class DesktopBridge : IDisposable
 {
     public const int Version = 1;
     private static readonly HashSet<string> Catalogs = ["projects", "levels", "package-names", "tasks"];
-    private readonly DesktopApiClient _api;
     private readonly NotifierService _service;
+    private readonly DesktopApiClient _api;
     private readonly DateOnly? _promptDate;
     public event Action<DateOnly, IReadOnlyList<ManualEntryPromptSession>>? ContinuePromptRequested;
     private TaskCompletionSource<bool>? _freeze;
@@ -119,14 +118,25 @@ public sealed class DesktopBridge : IDisposable
                 if (payload.GetProperty("bridgeVersion").GetInt32() != Version)
                     throw new BridgeException("incompatible", "Update Desktop Notifier to use this website.");
                 _hasPage = true;
-                await _service.GetDeviceAsync();
-                return new { bridgeVersion = Version, capabilities = new[] { "dailyWork", "profile", "catalogs", "reminders", "updates", "dashboard" },
+                var device = await _service.GetDeviceAsync();
+                return new { bridgeVersion = Version, capabilities = new[] { "identity", "catalogs", "reminders", "updates", "navigation" },
                     applicationVersion = typeof(DesktopBridge).Assembly.GetName().Version!.ToString(3),
+                    apiVersion = typeof(DesktopApiClient).Assembly.GetName().Version!.ToString(),
+                    machineName = Environment.MachineName, deviceId = device.Id,
                     requiredHours = _service.Settings.RequiredHoursPerDay, today = DateOnly.FromDateTime(DateTime.Today),
                     mode = _promptDate.HasValue ? "manualEntryPrompt" : "timesheet",
                     workDate = _promptDate ?? _pendingDate ?? DateOnly.FromDateTime(DateTime.Today), state = _service.Snapshot() };
             }
             if (!_hasPage) throw new BridgeException("notInitialized", "Initialize the notifier first.");
+            if (operation == "recordSubmission")
+            {
+                var date = WorkDate(payload);
+                var fromPrompt = Flag(payload, "fromPrompt");
+                if (fromPrompt != _promptDate.HasValue || (_promptDate is { } expectedPromptDate && expectedPromptDate != date))
+                    throw new BridgeException("invalidRequest", "The submission does not match this notifier window.");
+                _service.RecordSubmission(date, Flag(payload, "hasRows"), fromPrompt);
+                return null;
+            }
             if (_promptDate is { } promptDate)
             {
                 switch (operation)
@@ -136,27 +146,18 @@ public sealed class DesktopBridge : IDisposable
                             throw new BridgeException("incompatible", "Deploy the website with manual entry prompt support, then retry.");
                         _ready = true;
                         return null;
-                    case "promptData": return await _service.GetManualEntryPromptDataAsync(promptDate);
-                    case "submitPrompt":
-                        var sessions = payload.GetProperty("sessions").Deserialize<List<ManualEntryPromptSession>>(AppSettings.JsonOptions)
-                            ?? throw new ArgumentException("Sessions are required.");
-                        return await _service.SubmitPromptSessionsAsync(promptDate, sessions);
                     case "continuePrompt":
                         var suggestions = payload.GetProperty("sessions").Deserialize<List<ManualEntryPromptSession>>(AppSettings.JsonOptions)
                             ?? throw new ArgumentException("Suggested sessions are required.");
                         ContinuePromptRequested?.Invoke(promptDate, suggestions);
                         return null;
-                    case "profile":
                     case "saveCatalog":
-                        break; // Use the same permission checks as the main window.
+                        break;
                     default: throw new BridgeException("unknownOperation", "This operation is not available in the reminder.");
                 }
             }
             switch (operation)
             {
-                case "dashboardRequest":
-                    return await _api.DashboardRequestAsync(Text(payload, "method"), Text(payload, "path"),
-                        payload.TryGetProperty("body", out var body) ? body : default);
                 case "ready":
                     _ready = true;
                     if (_pendingDate is { } date) Event?.Invoke("navigate", new { workDate = date, suggestions = _pendingSuggestions, forceReload = _pendingForceReload });
@@ -170,26 +171,6 @@ public sealed class DesktopBridge : IDisposable
                         _pendingForceReload = false;
                     }
                     return null;
-                case "options": return new { projects = await _api.GetProjectsAsync(), clients = await _api.GetClientsAsync(),
-                    levels = await _api.GetLevelsAsync(), packageNames = await _api.GetPackageNamesAsync(), taskCategories = await _api.GetTaskCategoriesAsync() };
-                case "daily":
-                    var day = WorkDate(payload);
-                    var device = await _service.GetDeviceAsync();
-                    return new { status = await _api.GetStatusAsync(device.Id, day), sessions = await _api.GetManualSessionsAsync(device.Id, day) };
-                case "sessionDates":
-                    var start = DateOnly.ParseExact(Text(payload, "startDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                    var end = DateOnly.ParseExact(Text(payload, "endDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-                    if (end < start || end.DayNumber - start.DayNumber > 366) throw new ArgumentException("Choose a calendar range of up to one year.");
-                    return await _api.GetSessionDatesAsync((await _service.GetDeviceAsync()).Id, start, end);
-                case "submit": return await SubmitAsync(payload);
-                case "profile": return await _api.GetPersonalInformationAsync(Environment.MachineName);
-                case "saveProfile":
-                    var profile = payload.Deserialize<EmployeePersonalInformation>(AppSettings.JsonOptions) ?? throw new ArgumentException("Personal information is required.");
-                    if (string.IsNullOrWhiteSpace(profile.Email) || !new EmailAddressAttribute().IsValid(profile.Email)) throw new ArgumentException("Enter a valid email address.");
-                    if (profile.BirthDate?.Date > DateTime.Today) throw new ArgumentException("Birth date cannot be in the future.");
-                    // These are response-only permissions, never accepted as authority from the website.
-                    profile.CanManageCatalogs = false; profile.IsAdministrator = false; profile.DisplayName = null;
-                    return await _api.SavePersonalInformationAsync(Environment.MachineName, profile);
                 case "catalog":
                     await CheckCatalogAccessAsync();
                     return await _api.GetCatalogAsync(Catalog(payload));
@@ -198,11 +179,15 @@ public sealed class DesktopBridge : IDisposable
                     var catalog = Catalog(payload);
                     var name = Text(payload, "name").Trim();
                     if (name.Length is 0 or > 500) throw new ArgumentException("Enter a name of up to 500 characters.");
-                    var projectId = OptionalId(payload, "projectId"); var levelId = OptionalId(payload, "levelId");
-                    if (catalog is "levels" or "package-names" && projectId is null) throw new ArgumentException("Select a project.");
+                    var projectId = OptionalId(payload, "projectId");
+                    var levelId = OptionalId(payload, "levelId");
+                    if (catalog is "levels" or "package-names" && projectId is null)
+                        throw new ArgumentException("Select a project.");
                     var levelName = payload.TryGetProperty("levelName", out var levelText) ? levelText.GetString()?.Trim() : null;
-                    var clientIds = payload.TryGetProperty("clientIds", out var clientList) ? clientList.Deserialize<List<Guid>>(AppSettings.JsonOptions) : null;
-                    return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name, projectId, levelId, levelName, clientIds);
+                    var clientIds = payload.TryGetProperty("clientIds", out var clientList)
+                        ? clientList.Deserialize<List<Guid>>(AppSettings.JsonOptions) : null;
+                    return await _api.SaveCatalogItemAsync(catalog, OptionalId(payload, "id"), name,
+                        projectId, levelId, levelName, clientIds);
                 case "saveSchedule":
                     _service.SaveSchedule(TimeOnly.ParseExact(Text(payload, "morning"), "HH:mm", CultureInfo.InvariantCulture),
                         TimeOnly.ParseExact(Text(payload, "evening"), "HH:mm", CultureInfo.InvariantCulture),
@@ -222,37 +207,6 @@ public sealed class DesktopBridge : IDisposable
         if (!(await _api.GetPersonalInformationAsync(Environment.MachineName)).CanManageCatalogs)
             throw new BridgeException("accessDenied", "Your employee record no longer permits catalog management.");
     }
-    private async Task<SubmitResponse> SubmitAsync(JsonElement payload)
-    {
-        var date = WorkDate(payload);
-        var device = await _service.GetDeviceAsync();
-        var rows = payload.GetProperty("sessions").Deserialize<List<WebSession>>(AppSettings.JsonOptions) ?? throw new ArgumentException("Sessions are required.");
-        var deleted = payload.GetProperty("deletedIds").Deserialize<List<Guid>>(AppSettings.JsonOptions) ?? [];
-        if (rows.Count > 200 || deleted.Count > 200 || rows.Count + deleted.Count == 0) throw new ArgumentException("Add a session or select sessions to remove (maximum 200).");
-        var projects = await _api.GetProjectsAsync(); var clients = await _api.GetClientsAsync();
-        var status = await _api.GetStatusAsync(device.Id, date);
-        var request = new DailySubmitRequest { DeviceId = device.Id, WorkDate = date, AllowExistingDate = status.HasDailySession,
-            IncludeTrackedSessions = false, DeletedManualSessionIds = deleted };
-        foreach (var row in rows)
-        {
-            var project = projects.FirstOrDefault(p => p.Id == row.ProjectId);
-            if (project is null && !row.Id.HasValue) throw new ArgumentException("Select an existing project for every session.");
-            var client = clients.FirstOrDefault(c => c.Id == row.ClientId);
-            if (client is null && !row.Id.HasValue) throw new ArgumentException("Select an existing client for every session.");
-            if (row.EngagedSeconds <= 0 || row.EngagedSeconds > 86400) throw new ArgumentException("Hours must be greater than zero and no more than 24.");
-            if (string.IsNullOrWhiteSpace(row.TaskCategory)) throw new ArgumentException("Task category is required for every session.");
-            if (row.PackageName?.Trim().Length > 300) throw new ArgumentException("Package name cannot exceed 300 characters.");
-            var start = DateTime.SpecifyKind(date.ToDateTime(new TimeOnly(9, 0)), DateTimeKind.Local);
-            request.ManualSessions.Add(new() { Id = row.Id, ProjectId = row.ProjectId, ProjectName = project?.Name ?? "",
-                ClientId = row.ClientId, ClientName = client?.Name ?? "", Level = row.Level?.Trim(), PackageNameId = row.PackageNameId, PackageName = row.PackageName?.Trim(),
-                TaskCategory = row.TaskCategory.Trim(), Notes = row.Notes,
-                StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
-                EndedAtUtc = new DateTimeOffset(start.AddSeconds(row.EngagedSeconds).ToUniversalTime(), TimeSpan.Zero) });
-        }
-        var response = await _api.SubmitAsync(request);
-        _service.RecordSubmission(date, rows.Count > 0);
-        return response;
-    }
     private static string Catalog(JsonElement payload)
     {
         var value = Text(payload, "catalog");
@@ -265,17 +219,6 @@ public sealed class DesktopBridge : IDisposable
     }
     private static string Text(JsonElement value, string key) => value.GetProperty(key).GetString() ?? throw new ArgumentException($"{key} is required.");
     private static bool Flag(JsonElement value, string key) => value.GetProperty(key).GetBoolean();
-    private static Guid? OptionalId(JsonElement value, string key) => value.TryGetProperty(key, out var id) && id.ValueKind != JsonValueKind.Null ? id.GetGuid() : null;
-    private sealed class WebSession
-    {
-        public Guid? Id { get; set; }
-        public Guid ProjectId { get; set; }
-        public Guid? ClientId { get; set; }
-        public int EngagedSeconds { get; set; }
-        public string TaskCategory { get; set; } = "";
-        public string? Level { get; set; }
-        public Guid? PackageNameId { get; set; }
-        public string? PackageName { get; set; }
-        public string? Notes { get; set; }
-    }
+    private static Guid? OptionalId(JsonElement value, string key) =>
+        value.TryGetProperty(key, out var id) && id.ValueKind != JsonValueKind.Null ? id.GetGuid() : null;
 }

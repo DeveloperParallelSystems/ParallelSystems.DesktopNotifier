@@ -56,12 +56,13 @@ public sealed class NotifierService : IDisposable
     {
         Alert.Dismiss(); _state.DismissedMissingTimesheetWorkDate = Alert.DismissedWorkDate; _store.Write(_state);
     }
-    public void RecordSubmission(DateOnly date, bool hasRows)
+    public void RecordSubmission(DateOnly date, bool hasRows, bool fromPrompt = false)
     {
         if (hasRows) Alert.RecordSubmission(date);
         if (hasRows && date == DateOnly.FromDateTime(DateTime.Today))
             EntryPromptDismissRequested?.Invoke(date);
         NotificationDismissRequested?.Invoke(this, EventArgs.Empty);
+        if (fromPrompt) PromptSubmitted?.Invoke(date);
     }
     public void DeferEntryPrompt(DateOnly date)
     {
@@ -74,85 +75,6 @@ public sealed class NotifierService : IDisposable
         if (_entryPromptDeferredDate != date) return;
         _entryPromptDeferredDate = null;
         if (_entryPromptRaisedDate == date) _entryPromptRaisedDate = null;
-    }
-    public async Task<ManualEntryPromptData> GetManualEntryPromptDataAsync(DateOnly workDate)
-    {
-        using var lease = EnterOperation();
-        var device = await GetDeviceAsync();
-        var projectsTask = _api.GetProjectsAsync();
-        var clientsTask = _api.GetClientsAsync();
-        var levelsTask = _api.GetLevelsAsync();
-        var packageNamesTask = _api.GetPackageNamesAsync();
-        var taskCategoriesTask = _api.GetTaskCategoriesAsync();
-        var recentSessionDatesTask = _api.GetSessionDatesAsync(device.Id, workDate.AddDays(-366), workDate.AddDays(-1));
-        await Task.WhenAll(projectsTask, clientsTask, levelsTask, packageNamesTask, taskCategoriesTask, recentSessionDatesTask);
-        var previousSessions = new List<ExistingManualSessionModel>();
-        foreach (var recentDate in (await recentSessionDatesTask).OrderByDescending(date => date))
-        {
-            previousSessions = await _api.GetManualSessionsAsync(device.Id, recentDate);
-            if (previousSessions.Count > 0) break;
-        }
-        return new ManualEntryPromptData
-        {
-            Projects = await projectsTask,
-            Clients = await clientsTask,
-            Levels = await levelsTask,
-            PackageNames = await packageNamesTask,
-            TaskCategories = await taskCategoriesTask,
-            PreviousSessions = previousSessions
-        };
-    }
-    public async Task<SubmitResponse> SubmitPromptSessionsAsync(DateOnly workDate, IReadOnlyList<ManualEntryPromptSession> sessions)
-    {
-        using var lease = EnterOperation();
-        if (workDate != DateOnly.FromDateTime(DateTime.Today))
-            throw new ArgumentException("The reminder can only submit today's work.");
-        if (sessions.Count is 0 or > 200)
-            throw new ArgumentException("Add between 1 and 200 work sessions.");
-
-        var projects = await _api.GetProjectsAsync();
-        var clients = await _api.GetClientsAsync();
-        var device = await GetDeviceAsync();
-        var status = await _api.GetStatusAsync(device.Id, workDate);
-        if (status.AdditionalSeconds > 0)
-        {
-            EntryPromptDismissRequested?.Invoke(workDate);
-            throw new InvalidOperationException("A timesheet entry has already been recorded for today. The reminder has closed.");
-        }
-        var start = DateTime.SpecifyKind(workDate.ToDateTime(new TimeOnly(9, 0)), DateTimeKind.Local);
-        var request = new DailySubmitRequest { DeviceId = device.Id, WorkDate = workDate, AllowExistingDate = status.HasDailySession };
-        foreach (var session in sessions)
-        {
-            var project = projects.FirstOrDefault(item => item.Id == session.ProjectId)
-                ?? throw new ArgumentException("Select an existing project for every session.");
-            var client = clients.FirstOrDefault(item => item.Id == session.ClientId)
-                ?? throw new ArgumentException("Select an existing client for every session.");
-            if (session.EngagedSeconds is <= 0 or > 86400)
-                throw new ArgumentException("Hours must be greater than zero and no more than 24.");
-            if (string.IsNullOrWhiteSpace(session.TaskCategory))
-                throw new ArgumentException("Task category is required for every session.");
-            if (session.PackageName?.Trim().Length > 300)
-                throw new ArgumentException("Package name cannot exceed 300 characters.");
-
-            request.ManualSessions.Add(new ManualSubmitModel
-            {
-                ProjectId = project.Id,
-                ProjectName = project.Name,
-                ClientId = client.Id,
-                ClientName = client.Name,
-                Level = session.Level?.Trim(),
-                PackageNameId = session.PackageNameId,
-                PackageName = session.PackageName?.Trim(),
-                TaskCategory = session.TaskCategory.Trim(),
-                Notes = session.Notes?.Trim(),
-                StartedAtUtc = new DateTimeOffset(start.ToUniversalTime(), TimeSpan.Zero),
-                EndedAtUtc = new DateTimeOffset(start.AddSeconds(session.EngagedSeconds).ToUniversalTime(), TimeSpan.Zero)
-            });
-        }
-        var response = await _api.SubmitAsync(request);
-        RecordSubmission(workDate, true);
-        PromptSubmitted?.Invoke(workDate);
-        return response;
     }
     public void SaveSchedule(TimeOnly morning, TimeOnly evening, bool? adminDisableInAndOutNotifications = null)
     {
