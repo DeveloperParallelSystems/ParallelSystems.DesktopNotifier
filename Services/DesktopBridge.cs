@@ -181,7 +181,7 @@ public sealed class DesktopBridge : IDisposable
                     if (name.Length is 0 or > 500) throw new ArgumentException("Enter a name of up to 500 characters.");
                     var projectId = OptionalId(payload, "projectId");
                     var levelId = OptionalId(payload, "levelId");
-                    if (catalog is "levels" or "package-names" && projectId is null)
+                    if (catalog is "areas" or "levels" or "package-names" && projectId is null)
                         throw new ArgumentException("Select a project.");
                     var levelName = payload.TryGetProperty("levelName", out var levelText) ? levelText.GetString()?.Trim() : null;
                     var clientIds = payload.TryGetProperty("clientIds", out var clientList)
