@@ -29,7 +29,7 @@ The local application retains these API calls:
 - `GET /api/v2/desktop/daily-work/status` checks missing-time alerts and reminder eligibility.
 - `GET /api/v2/desktop/daily-work/settings` reads the server-controlled persistent-prompt schedule.
 - `GET /api/v2/desktop/daily-work/personal-information?machineName=...` checks notification preferences and current administrator status for background notification behavior. The hosted page separately uses browser requests for its profile UI.
-- `GET /api/projects`, `GET /api/levels`, `GET /api/package-names`, and `GET /api/tasks`, plus their catalog `POST`/`PUT` operations, remain native-bridged so the host can recheck `CanManageCatalogs` before every read or write. Do not move these catalog calls to browser fetch unless the API server enforces the same permission check itself.
+- `GET /api/projects`, `GET /api/levels`, `GET /api/areas`, `GET /api/package-names`, and `GET /api/tasks`, plus their catalog `POST`/`PUT` operations, remain native-bridged so the host can recheck `CanManageCatalogs` before every read or write. Do not move these catalog calls to browser fetch unless the API server enforces the same permission check itself.
 
 Legacy WPF view-model and dialog classes remain for regression fixtures; the production application hosts the WebView UI and does not use those legacy views.
 
@@ -56,3 +56,4 @@ The page freezes controls synchronously before acknowledging `prepareUpdate`. Na
 Before rollout, test the installer on clean Windows accounts with and without Evergreen, plus offline/proxy installation failure. Verify startup registration, close-to-tray, a second `--show-main` launch, notification navigation, API/website outage recovery, and prepare/abort/commit through the real updater. The automated browser suite uses a simulated native transport; it does not substitute for the Windows host smoke check.
 
 The hosted page remains the main timesheet frontend. The 1 p.m. entry prompt uses the same WebView2 host and hosted route, with `manualEntryPrompt` mode supplied by a separate native bridge. Only loading/recovery remains WPF. Deploy the website with prompt support before this wrapper; older pages fail the explicit prompt handshake and show recovery. The prompt bridge allows only prediction loading, submission for its native work date, and continuation in the main window. Yesterday’s session IDs are discarded. Updates wait while the reminder is open, and recovery offers Retry or Continue in main window. Legacy WPF view-model/dialog code remains for existing regression fixtures.
+

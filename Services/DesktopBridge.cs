@@ -22,7 +22,7 @@ public static class DesktopPagePolicy
 public sealed class DesktopBridge : IDisposable
 {
     public const int Version = 1;
-    private static readonly HashSet<string> Catalogs = ["projects", "levels", "package-names", "tasks"];
+    private static readonly HashSet<string> Catalogs = ["projects", "areas", "levels", "package-names", "tasks"];
     private readonly NotifierService _service;
     private readonly DesktopApiClient _api;
     private readonly DateOnly? _promptDate;
